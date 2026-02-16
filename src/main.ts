@@ -7,13 +7,16 @@ interface Task {
   category: 'today' | 'important' | 'someday';
   important: boolean;
   dueDate: string | null; // 格式: YYYY-MM-DD
+  deletedAt?: number; // 删除时间，用于回收站
 }
 
 // 应用状态
 interface AppState {
   tasks: Task[];
+  deletedTasks: Task[]; // 回收站
   filter: 'all' | 'active' | 'completed';
   category: 'today' | 'important' | 'someday';
+  view: 'main' | 'trash'; // 当前视图
 }
 
 // 本地存储键名
@@ -33,15 +36,30 @@ function loadFromStorage(): AppState {
           dueDate: task.dueDate ?? null
         }));
       }
-      return parsed;
+      if (parsed.deletedTasks) {
+        parsed.deletedTasks = parsed.deletedTasks.map((task: Task) => ({
+          ...task,
+          important: task.important ?? false,
+          dueDate: task.dueDate ?? null
+        }));
+      }
+      return {
+        tasks: parsed.tasks || [],
+        deletedTasks: parsed.deletedTasks || [],
+        filter: parsed.filter || 'all',
+        category: parsed.category || 'today',
+        view: 'main'
+      };
     }
   } catch (e) {
     console.error('Failed to load from storage:', e);
   }
   return {
     tasks: [],
+    deletedTasks: [],
     filter: 'all',
-    category: 'today'
+    category: 'today',
+    view: 'main'
   };
 }
 
@@ -259,12 +277,156 @@ function toggleTask(id: string): void {
   }
 }
 
-// 删除任务
+// 删除任务（移入回收站）
 function deleteTask(id: string): void {
-  appState.tasks = appState.tasks.filter(t => t.id !== id);
+  const task = appState.tasks.find(t => t.id === id);
+  if (task) {
+    task.deletedAt = Date.now();
+    appState.deletedTasks.unshift(task);
+    appState.tasks = appState.tasks.filter(t => t.id !== id);
+    saveToStorage(appState);
+    renderTasks();
+    updateStats();
+    updateTrashCount();
+  }
+}
+
+// 恢复任务
+function restoreTask(id: string): void {
+  const task = appState.deletedTasks.find(t => t.id === id);
+  if (task) {
+    delete task.deletedAt;
+    appState.tasks.unshift(task);
+    appState.deletedTasks = appState.deletedTasks.filter(t => t.id !== id);
+    saveToStorage(appState);
+    renderTrash();
+    updateTrashCount();
+  }
+}
+
+// 永久删除任务
+function permanentDeleteTask(id: string): void {
+  appState.deletedTasks = appState.deletedTasks.filter(t => t.id !== id);
   saveToStorage(appState);
-  renderTasks();
-  updateStats();
+  renderTrash();
+  updateTrashCount();
+}
+
+// 清空回收站
+function emptyTrash(): void {
+  appState.deletedTasks = [];
+  saveToStorage(appState);
+  renderTrash();
+  updateTrashCount();
+}
+
+// 更新回收站计数
+function updateTrashCount(): void {
+  const countEl = document.getElementById('trash-count');
+  const emptyTrashContainer = document.getElementById('empty-trash-btn-container');
+  
+  if (countEl) {
+    const count = appState.deletedTasks.length;
+    countEl.textContent = count > 0 ? `(${count})` : '';
+  }
+  
+  if (emptyTrashContainer) {
+    emptyTrashContainer.style.display = appState.deletedTasks.length > 0 ? 'block' : 'none';
+  }
+}
+
+// 切换视图
+function switchView(view: 'main' | 'trash'): void {
+  appState.view = view;
+  saveToStorage(appState);
+  updateViewUI();
+  if (view === 'main') {
+    renderTasks();
+    updateStats();
+  } else {
+    renderTrash();
+  }
+}
+
+// 更新视图UI
+function updateViewUI(): void {
+  const mainView = document.getElementById('main-view');
+  const trashView = document.getElementById('trash-view');
+  const trashBtn = document.getElementById('trash-btn');
+  
+  if (appState.view === 'main') {
+    if (mainView) mainView.style.display = 'block';
+    if (trashView) trashView.style.display = 'none';
+    if (trashBtn) trashBtn.classList.remove('active');
+  } else {
+    if (mainView) mainView.style.display = 'none';
+    if (trashView) trashView.style.display = 'block';
+    if (trashBtn) trashBtn.classList.add('active');
+  }
+}
+
+// 渲染回收站
+function renderTrash(): void {
+  const trashContainer = document.getElementById('trash-container');
+  if (!trashContainer) return;
+
+  if (appState.deletedTasks.length === 0) {
+    trashContainer.innerHTML = `
+      <div class="empty-state fade-in" style="text-align: center; padding: 3rem 1rem; color: var(--muted);">
+        <div style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.5;">○</div>
+        <p style="font-style: italic;">回收站为空</p>
+      </div>
+    `;
+    return;
+  }
+
+  // 按删除时间倒序排列
+  const sortedTasks = [...appState.deletedTasks].sort((a, b) => 
+    (b.deletedAt || 0) - (a.deletedAt || 0)
+  );
+
+  trashContainer.innerHTML = sortedTasks.map((task, index) => {
+    const dateDisplay = formatDate(task.dueDate);
+    const deletedDate = task.deletedAt ? new Date(task.deletedAt).toLocaleDateString('zh-CN') : '';
+    
+    return `
+    <div class="task-item slide-in deleted-task" 
+         data-id="${task.id}" 
+         style="animation-delay: ${index * 0.05}s; opacity: 0.7; border-left-color: var(--muted);">
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
+          <span class="task-text" style="font-size: 0.95rem; ${task.completed ? 'text-decoration: line-through; color: var(--muted);' : ''}">
+            ${task.important ? '<span style="color: #c9a87c; margin-right: 0.25rem;">★</span>' : ''}${escapeHtml(task.text)}
+          </span>
+          <span style="font-size: 0.75rem; color: var(--muted);">
+            删除于 ${deletedDate}
+          </span>
+        </div>
+        <button class="restore-btn" data-action="restore" data-id="${task.id}" 
+                style="background: none; border: 1px solid var(--border); color: var(--ink-medium); 
+                       cursor: pointer; font-size: 0.8rem; padding: 0.25rem 0.75rem; 
+                       border-radius: 1rem; transition: all 0.3s;">
+          恢复
+        </button>
+        <button class="permanent-delete-btn" data-action="permanent-delete" data-id="${task.id}" 
+                style="background: none; border: none; color: #c97070; cursor: pointer; 
+                       font-size: 1.25rem; opacity: 0; transition: opacity 0.3s; padding: 0 0.5rem;">
+          ×
+        </button>
+      </div>
+    </div>
+  `}).join('');
+
+  // 添加悬停显示永久删除按钮
+  trashContainer.querySelectorAll('.deleted-task').forEach(item => {
+    const deleteBtn = item.querySelector('.permanent-delete-btn') as HTMLElement;
+    item.addEventListener('mouseenter', () => {
+      if (deleteBtn) deleteBtn.style.opacity = '1';
+    });
+    item.addEventListener('mouseleave', () => {
+      if (deleteBtn) deleteBtn.style.opacity = '0';
+    });
+  });
 }
 
 // 切换分类
@@ -362,124 +524,168 @@ export function initApp(): void {
 
       <!-- 主要内容 -->
       <main style="flex: 1; max-width: 640px; width: 100%; margin: 0 auto; padding: 0 1.5rem 3rem;">
-        <!-- 分类标签 -->
-        <div class="fade-in delay-1" style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border);">
-          <button class="category-btn" data-category="today" 
-                  style="background: none; border: none; padding: 0.75rem 0; cursor: pointer; 
-                         font-size: 0.875rem; letter-spacing: 0.1em; border-bottom: 2px solid transparent; 
-                         transition: all 0.3s; margin-bottom: -1px;">
-            今日
-          </button>
-          <button class="category-btn" data-category="important"
-                  style="background: none; border: none; padding: 0.75rem 0; cursor: pointer; 
-                         font-size: 0.875rem; letter-spacing: 0.1em; border-bottom: 2px solid transparent; 
-                         transition: all 0.3s; margin-bottom: -1px;">
-            重要
-          </button>
-          <button class="category-btn" data-category="someday"
-                  style="background: none; border: none; padding: 0.75rem 0; cursor: pointer; 
-                         font-size: 0.875rem; letter-spacing: 0.1em; border-bottom: 2px solid transparent; 
-                         transition: all 0.3s; margin-bottom: -1px;">
-            某天
-          </button>
+        <!-- 主视图 -->
+        <div id="main-view">
+          <!-- 分类标签 -->
+          <div class="fade-in delay-1" style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border);">
+            <button class="category-btn" data-category="today" 
+                    style="background: none; border: none; padding: 0.75rem 0; cursor: pointer; 
+                           font-size: 0.875rem; letter-spacing: 0.1em; border-bottom: 2px solid transparent; 
+                           transition: all 0.3s; margin-bottom: -1px;">
+              今日
+            </button>
+            <button class="category-btn" data-category="important"
+                    style="background: none; border: none; padding: 0.75rem 0; cursor: pointer; 
+                           font-size: 0.875rem; letter-spacing: 0.1em; border-bottom: 2px solid transparent; 
+                           transition: all 0.3s; margin-bottom: -1px;">
+              重要
+            </button>
+            <button class="category-btn" data-category="someday"
+                    style="background: none; border: none; padding: 0.75rem 0; cursor: pointer; 
+                           font-size: 0.875rem; letter-spacing: 0.1em; border-bottom: 2px solid transparent; 
+                           transition: all 0.3s; margin-bottom: -1px;">
+              某天
+            </button>
+          </div>
+
+          <!-- 分类标题 -->
+          <div class="fade-in delay-2" style="text-align: center; margin-bottom: 2rem;">
+            <h2 id="category-title" style="font-family: 'Noto Serif SC', serif; font-size: 1.25rem; 
+                font-weight: 400; color: var(--ink-medium); letter-spacing: 0.15em;">
+              今日之事
+            </h2>
+          </div>
+
+          <!-- 添加任务 -->
+          <div class="fade-in delay-2 zen-card" style="margin-bottom: 2rem;">
+            <form id="task-form">
+              <div style="margin-bottom: 1rem;">
+                <input type="text" id="task-input" class="zen-input" 
+                       placeholder="写下你的思绪..." 
+                       autocomplete="off">
+              </div>
+              <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+                <!-- 重要选项 -->
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
+                  <input type="checkbox" id="important-checkbox" 
+                         style="width: 16px; height: 16px; accent-color: #c9a87c; cursor: pointer;">
+                  <span style="font-size: 0.85rem; color: var(--muted);">
+                    <span style="color: #c9a87c;">★</span> 重要
+                  </span>
+                </label>
+                <!-- 日期选择 -->
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--muted);">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                  <input type="date" id="due-date-input" 
+                         style="border: none; background: transparent; font-size: 0.85rem; 
+                                color: var(--foreground); cursor: pointer; font-family: inherit;
+                                outline: none;">
+                </label>
+                <!-- 添加按钮 -->
+                <button type="submit" class="zen-btn primary" style="margin-left: auto;">添加</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- 过滤器 -->
+          <div class="fade-in delay-3" style="display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem;">
+            <button class="filter-btn" data-filter="all"
+                    style="background: transparent; border: none; padding: 0.25rem 0.75rem; 
+                           border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
+                           color: var(--muted); transition: all 0.3s;">
+              全部
+            </button>
+            <button class="filter-btn" data-filter="active"
+                    style="background: transparent; border: none; padding: 0.25rem 0.75rem; 
+                           border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
+                           color: var(--muted); transition: all 0.3s;">
+              进行中
+            </button>
+            <button class="filter-btn" data-filter="completed"
+                    style="background: transparent; border: none; padding: 0.25rem 0.75rem; 
+                           border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
+                           color: var(--muted); transition: all 0.3s;">
+              已完成
+            </button>
+          </div>
+
+          <!-- 任务列表 -->
+          <div id="tasks-container" class="fade-in delay-3">
+            <!-- 任务将在这里渲染 -->
+          </div>
+
+          <!-- 统计信息 -->
+          <div class="fade-in delay-4" style="margin-top: 2rem; text-align: center;">
+            <div class="zen-divider"></div>
+            <div style="display: flex; justify-content: center; gap: 2rem; margin-top: 1.5rem;">
+              <div style="text-align: center;">
+                <div style="font-size: 1.5rem; font-weight: 300; color: var(--ink-medium);" id="total-count">0</div>
+                <div style="font-size: 0.75rem; color: var(--muted); letter-spacing: 0.1em;">总数</div>
+              </div>
+              <div style="text-align: center;">
+                <div style="font-size: 1.5rem; font-weight: 300; color: var(--ink-medium);" id="active-count">0</div>
+                <div style="font-size: 0.75rem; color: var(--muted); letter-spacing: 0.1em;">进行中</div>
+              </div>
+              <div style="text-align: center;">
+                <div style="font-size: 1.5rem; font-weight: 300; color: var(--ink-medium);" id="completed-count">0</div>
+                <div style="font-size: 0.75rem; color: var(--muted); letter-spacing: 0.1em;">已完成</div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- 分类标题 -->
-        <div class="fade-in delay-2" style="text-align: center; margin-bottom: 2rem;">
-          <h2 id="category-title" style="font-family: 'Noto Serif SC', serif; font-size: 1.25rem; 
-              font-weight: 400; color: var(--ink-medium); letter-spacing: 0.15em;">
-            今日之事
-          </h2>
-        </div>
+        <!-- 回收站视图 -->
+        <div id="trash-view" style="display: none;">
+          <!-- 回收站标题 -->
+          <div class="fade-in" style="text-align: center; margin-bottom: 2rem; display: flex; align-items: center; justify-content: center; gap: 1rem;">
+            <button id="back-to-main" 
+                    style="background: none; border: none; color: var(--muted); cursor: pointer; 
+                           font-size: 0.875rem; display: flex; align-items: center; gap: 0.25rem;">
+              ← 返回
+            </button>
+            <h2 style="font-family: 'Noto Serif SC', serif; font-size: 1.25rem; 
+                font-weight: 400; color: var(--ink-medium); letter-spacing: 0.15em;">
+              回收站
+            </h2>
+          </div>
 
-        <!-- 添加任务 -->
-        <div class="fade-in delay-2 zen-card" style="margin-bottom: 2rem;">
-          <form id="task-form">
-            <div style="margin-bottom: 1rem;">
-              <input type="text" id="task-input" class="zen-input" 
-                     placeholder="写下你的思绪..." 
-                     autocomplete="off">
-            </div>
-            <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
-              <!-- 重要选项 -->
-              <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
-                <input type="checkbox" id="important-checkbox" 
-                       style="width: 16px; height: 16px; accent-color: #c9a87c; cursor: pointer;">
-                <span style="font-size: 0.85rem; color: var(--muted);">
-                  <span style="color: #c9a87c;">★</span> 重要
-                </span>
-              </label>
-              <!-- 日期选择 -->
-              <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--muted);">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                  <line x1="16" y1="2" x2="16" y2="6"/>
-                  <line x1="8" y1="2" x2="8" y2="6"/>
-                  <line x1="3" y1="10" x2="21" y2="10"/>
-                </svg>
-                <input type="date" id="due-date-input" 
-                       style="border: none; background: transparent; font-size: 0.85rem; 
-                              color: var(--foreground); cursor: pointer; font-family: inherit;
-                              outline: none;">
-              </label>
-              <!-- 添加按钮 -->
-              <button type="submit" class="zen-btn primary" style="margin-left: auto;">添加</button>
-            </div>
-          </form>
-        </div>
+          <!-- 清空回收站按钮 -->
+          <div id="empty-trash-btn-container" style="text-align: center; margin-bottom: 1.5rem; display: none;">
+            <button id="empty-trash-btn" class="zen-btn" style="font-size: 0.8rem; color: #c97070; border-color: #e8c9c9;">
+              清空回收站
+            </button>
+          </div>
 
-        <!-- 过滤器 -->
-        <div class="fade-in delay-3" style="display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem;">
-          <button class="filter-btn" data-filter="all"
-                  style="background: transparent; border: none; padding: 0.25rem 0.75rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
-                         color: var(--muted); transition: all 0.3s;">
-            全部
-          </button>
-          <button class="filter-btn" data-filter="active"
-                  style="background: transparent; border: none; padding: 0.25rem 0.75rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
-                         color: var(--muted); transition: all 0.3s;">
-            进行中
-          </button>
-          <button class="filter-btn" data-filter="completed"
-                  style="background: transparent; border: none; padding: 0.25rem 0.75rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
-                         color: var(--muted); transition: all 0.3s;">
-            已完成
-          </button>
-        </div>
-
-        <!-- 任务列表 -->
-        <div id="tasks-container" class="fade-in delay-3">
-          <!-- 任务将在这里渲染 -->
-        </div>
-
-        <!-- 统计信息 -->
-        <div class="fade-in delay-4" style="margin-top: 2rem; text-align: center;">
-          <div class="zen-divider"></div>
-          <div style="display: flex; justify-content: center; gap: 2rem; margin-top: 1.5rem;">
-            <div style="text-align: center;">
-              <div style="font-size: 1.5rem; font-weight: 300; color: var(--ink-medium);" id="total-count">0</div>
-              <div style="font-size: 0.75rem; color: var(--muted); letter-spacing: 0.1em;">总数</div>
-            </div>
-            <div style="text-align: center;">
-              <div style="font-size: 1.5rem; font-weight: 300; color: var(--ink-medium);" id="active-count">0</div>
-              <div style="font-size: 0.75rem; color: var(--muted); letter-spacing: 0.1em;">进行中</div>
-            </div>
-            <div style="text-align: center;">
-              <div style="font-size: 1.5rem; font-weight: 300; color: var(--ink-medium);" id="completed-count">0</div>
-              <div style="font-size: 0.75rem; color: var(--muted); letter-spacing: 0.1em;">已完成</div>
-            </div>
+          <!-- 回收站列表 -->
+          <div id="trash-container" class="fade-in">
+            <!-- 已删除的任务将在这里渲染 -->
           </div>
         </div>
       </main>
 
       <!-- 底部 -->
-      <footer style="text-align: center; padding: 2rem; color: var(--muted); font-size: 0.75rem;">
-        <span class="zen-dot" style="margin-right: 0.5rem;"></span>
-        <span style="letter-spacing: 0.1em;">专注当下，静心完成</span>
-        <span class="zen-dot" style="margin-left: 0.5rem;"></span>
+      <footer style="text-align: center; padding: 1.5rem; color: var(--muted); font-size: 0.75rem;">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 1.5rem;">
+          <span class="zen-dot"></span>
+          <span style="letter-spacing: 0.1em;">专注当下，静心完成</span>
+          <span class="zen-dot"></span>
+          <!-- 回收站按钮 -->
+          <button id="trash-btn" 
+                  style="background: none; border: none; color: var(--muted); cursor: pointer; 
+                         display: flex; align-items: center; gap: 0.25rem; transition: all 0.3s;
+                         font-size: 0.75rem; font-family: inherit;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+            <span id="trash-count"></span>
+          </button>
+        </div>
       </footer>
     </div>
   `;
@@ -487,8 +693,10 @@ export function initApp(): void {
   // 初始化 UI 状态
   updateCategoryUI();
   updateFilterUI();
+  updateViewUI();
   renderTasks();
   updateStats();
+  updateTrashCount();
 
   // 绑定事件
   bindEvents();
@@ -559,6 +767,48 @@ function bindEvents(): void {
     });
     input.addEventListener('blur', () => {
       input.parentElement!.style.borderBottomColor = 'var(--border)';
+    });
+  }
+
+  // 回收站按钮
+  const trashBtn = document.getElementById('trash-btn');
+  if (trashBtn) {
+    trashBtn.addEventListener('click', () => {
+      switchView('trash');
+    });
+  }
+
+  // 返回主视图按钮
+  const backBtn = document.getElementById('back-to-main');
+  if (backBtn) {
+    backBtn.addEventListener('click', () => {
+      switchView('main');
+    });
+  }
+
+  // 清空回收站按钮
+  const emptyTrashBtn = document.getElementById('empty-trash-btn');
+  if (emptyTrashBtn) {
+    emptyTrashBtn.addEventListener('click', () => {
+      if (confirm('确定要清空回收站吗？此操作不可撤销。')) {
+        emptyTrash();
+      }
+    });
+  }
+
+  // 回收站容器事件委托
+  const trashContainer = document.getElementById('trash-container');
+  if (trashContainer) {
+    trashContainer.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const action = target.getAttribute('data-action');
+      const id = target.getAttribute('data-id');
+
+      if (action === 'restore' && id) {
+        restoreTask(id);
+      } else if (action === 'permanent-delete' && id) {
+        permanentDeleteTask(id);
+      }
     });
   }
 }
