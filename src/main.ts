@@ -676,6 +676,7 @@ export function initApp(): void {
                 <button type="submit" class="zen-btn primary" style="margin-left: auto;">添加</button>
               </div>
             </form>
+          </div>
         </div>
 
         <!-- 任务列表 -->
