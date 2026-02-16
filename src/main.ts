@@ -14,8 +14,8 @@ interface Task {
 interface AppState {
   tasks: Task[];
   deletedTasks: Task[]; // 已删除任务
-  statusFilter: 'today' | 'active' | 'completed' | 'deleted'; // 主筛选（单选）
-  tags: ('all' | 'important' | 'someday')[]; // 多选标签
+  statusFilter: 'all' | 'today' | 'active' | 'completed' | 'deleted'; // 主筛选（单选）
+  tags: ('important' | 'someday')[]; // 多选标签
 }
 
 // 本地存储键名
@@ -44,8 +44,8 @@ function loadFromStorage(): AppState {
       }
       
       // 兼容旧的状态结构
-      let statusFilter: 'today' | 'active' | 'completed' | 'deleted' = 'today';
-      let tags: ('all' | 'important' | 'someday')[] = ['all'];
+      let statusFilter: 'all' | 'today' | 'active' | 'completed' | 'deleted' = 'all';
+      let tags: ('important' | 'someday')[] = [];
       
       if (parsed.statusFilter) {
         statusFilter = parsed.statusFilter;
@@ -74,7 +74,7 @@ function loadFromStorage(): AppState {
   return {
     tasks: [],
     deletedTasks: [],
-    statusFilter: 'today',
+    statusFilter: 'all',
     tags: []
   };
 }
@@ -167,6 +167,7 @@ function renderTasks(): void {
       return task.dueDate === today || 
              (task.dueDate === null && new Date(task.createdAt).toDateString() === new Date().toDateString());
     }
+    // 'all' 显示所有未删除的任务
     return true;
   });
 
@@ -524,7 +525,7 @@ function updateFilterUI(): void {
   // 更新标签按钮（多选）
   document.querySelectorAll('.tag-btn').forEach(btn => {
     const btnTag = btn.getAttribute('data-tag');
-    const isSelected = appState.tags.includes(btnTag as 'all' | 'important' | 'someday');
+    const isSelected = appState.tags.includes(btnTag as 'important' | 'someday');
     if (isSelected) {
       btn.classList.add('active');
       (btn as HTMLElement).style.background = 'var(--sand)';
@@ -535,8 +536,6 @@ function updateFilterUI(): void {
       (btn as HTMLElement).style.color = 'var(--muted)';
     }
   });
-
-  // 更新标签按钮（多选）
   document.querySelectorAll('.tag-btn').forEach(btn => {
     const btnTag = btn.getAttribute('data-tag');
     const isSelected = appState.tags.includes(btnTag as 'important' | 'someday');
@@ -596,6 +595,12 @@ export function initApp(): void {
                          border-radius: 1rem; cursor: pointer; font-size: 0.875rem; 
                          color: var(--muted); transition: all 0.3s;">
             今日
+          </button>
+          <button class="status-btn" data-status="all"
+                  style="background: transparent; border: none; padding: 0.5rem 1rem; 
+                         border-radius: 1rem; cursor: pointer; font-size: 0.875rem; 
+                         color: var(--muted); transition: all 0.3s;">
+            全部
           </button>
           <button class="status-btn" data-status="active"
                   style="background: transparent; border: none; padding: 0.5rem 1rem; 
