@@ -199,7 +199,7 @@ function renderTasks(): void {
         <button class="delete-btn" data-action="delete" data-id="${task.id}" 
                 style="background: none; border: none; color: var(--muted); cursor: pointer; 
                        font-size: 1.25rem; opacity: 0; transition: opacity 0.3s; padding: 0 0.5rem;">
-          −
+          ×
         </button>
       </div>
     </div>
