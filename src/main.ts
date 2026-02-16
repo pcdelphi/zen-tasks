@@ -55,14 +55,10 @@ function loadFromStorage(): AppState {
       }
       
       if (parsed.tags) {
-        tags = parsed.tags;
+        tags = parsed.tags.filter((t: string) => t !== 'all'); // 过滤掉旧的 'all'
       } else if (parsed.category) {
         // 兼容旧的 category 字段
-        if (parsed.category === 'today') {
-          tags = ['all'];
-        } else {
-          tags = [parsed.category];
-        }
+        tags = parsed.category === 'today' ? [] : [parsed.category];
       }
       
       return {
@@ -79,7 +75,7 @@ function loadFromStorage(): AppState {
     tasks: [],
     deletedTasks: [],
     statusFilter: 'today',
-    tags: ['all']
+    tags: []
   };
 }
 
@@ -174,8 +170,8 @@ function renderTasks(): void {
     return true;
   });
 
-  // 按标签多选筛选
-  if (!appState.tags.includes('all')) {
+  // 按标签多选筛选（空数组表示显示全部）
+  if (appState.tags.length > 0) {
     filteredTasks = filteredTasks.filter(task => {
       const matchImportant = appState.tags.includes('important') && task.important;
       const matchSomeday = appState.tags.includes('someday') && task.dueDate !== null;
@@ -331,7 +327,8 @@ function updateStats(): void {
   });
 
   // 按标签筛选
-  if (!appState.tags.includes('all')) {
+  // 按标签筛选（空数组表示显示全部）
+  if (appState.tags.length > 0) {
     filteredTasks = filteredTasks.filter(task => {
       const matchImportant = appState.tags.includes('important') && task.important;
       const matchSomeday = appState.tags.includes('someday') && task.dueDate !== null;
@@ -493,24 +490,13 @@ function switchStatusFilter(filter: 'today' | 'active' | 'completed' | 'deleted'
 }
 
 // 切换标签（多选）
-function toggleTag(tag: 'all' | 'important' | 'someday'): void {
-  if (tag === 'all') {
-    // 点击"全部"时，清除其他选择
-    appState.tags = ['all'];
+// 切换标签（多选）
+function toggleTag(tag: 'important' | 'someday'): void {
+  // 切换当前标签
+  if (appState.tags.includes(tag)) {
+    appState.tags = appState.tags.filter(t => t !== tag);
   } else {
-    // 移除"全部"选择
-    appState.tags = appState.tags.filter(t => t !== 'all');
-    
-    // 切换当前标签
-    if (appState.tags.includes(tag)) {
-      appState.tags = appState.tags.filter(t => t !== tag);
-      // 如果没有任何选择，默认选择"全部"
-      if (appState.tags.length === 0) {
-        appState.tags = ['all'];
-      }
-    } else {
-      appState.tags.push(tag);
-    }
+    appState.tags.push(tag);
   }
   
   saveToStorage(appState);
@@ -526,8 +512,8 @@ function updateFilterUI(): void {
     const btnFilter = btn.getAttribute('data-status');
     if (btnFilter === appState.statusFilter) {
       btn.classList.add('active');
-      (btn as HTMLElement).style.background = 'var(--sand)';
-      (btn as HTMLElement).style.color = 'var(--ink-dark)';
+      (btn as HTMLElement).style.background = 'var(--ink-medium)';
+      (btn as HTMLElement).style.color = 'white';
     } else {
       btn.classList.remove('active');
       (btn as HTMLElement).style.background = 'transparent';
@@ -547,6 +533,23 @@ function updateFilterUI(): void {
       btn.classList.remove('active');
       (btn as HTMLElement).style.background = 'transparent';
       (btn as HTMLElement).style.color = 'var(--muted)';
+    }
+  });
+
+  // 更新标签按钮（多选）
+  document.querySelectorAll('.tag-btn').forEach(btn => {
+    const btnTag = btn.getAttribute('data-tag');
+    const isSelected = appState.tags.includes(btnTag as 'important' | 'someday');
+    if (isSelected) {
+      btn.classList.add('active');
+      (btn as HTMLElement).style.background = 'var(--ink-medium)';
+      (btn as HTMLElement).style.color = 'white';
+      (btn as HTMLElement).style.borderColor = 'var(--ink-medium)';
+    } else {
+      btn.classList.remove('active');
+      (btn as HTMLElement).style.background = 'transparent';
+      (btn as HTMLElement).style.color = 'var(--muted)';
+      (btn as HTMLElement).style.borderColor = 'var(--border)';
     }
   });
 }
@@ -623,12 +626,6 @@ export function initApp(): void {
 
         <!-- 标签筛选（多选） -->
         <div class="fade-in delay-2" style="display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem;">
-          <button class="tag-btn" data-tag="all"
-                  style="background: transparent; border: 1px solid var(--border); padding: 0.25rem 0.75rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
-                         color: var(--muted); transition: all 0.3s;">
-            全部
-          </button>
           <button class="tag-btn" data-tag="important"
                   style="background: transparent; border: 1px solid var(--border); padding: 0.25rem 0.75rem; 
                          border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
@@ -789,7 +786,7 @@ function bindEvents(): void {
   // 标签切换（多选）
   document.querySelectorAll('.tag-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const tag = btn.getAttribute('data-tag') as 'all' | 'important' | 'someday';
+      const tag = btn.getAttribute('data-tag') as 'important' | 'someday';
       if (tag) toggleTag(tag);
     });
   });
