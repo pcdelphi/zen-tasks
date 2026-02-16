@@ -13,10 +13,9 @@ interface Task {
 // 应用状态
 interface AppState {
   tasks: Task[];
-  deletedTasks: Task[]; // 回收站
-  filter: 'all' | 'active' | 'completed';
+  deletedTasks: Task[]; // 已删除任务
+  filter: 'all' | 'active' | 'completed' | 'deleted';
   category: 'today' | 'important' | 'someday';
-  view: 'main' | 'trash'; // 当前视图
 }
 
 // 本地存储键名
@@ -47,8 +46,7 @@ function loadFromStorage(): AppState {
         tasks: parsed.tasks || [],
         deletedTasks: parsed.deletedTasks || [],
         filter: parsed.filter || 'all',
-        category: parsed.category || 'today',
-        view: 'main'
+        category: parsed.category || 'today'
       };
     }
   } catch (e) {
@@ -58,8 +56,7 @@ function loadFromStorage(): AppState {
     tasks: [],
     deletedTasks: [],
     filter: 'all',
-    category: 'today',
-    view: 'main'
+    category: 'today'
   };
 }
 
@@ -134,6 +131,12 @@ function createRipple(event: MouseEvent, element: HTMLElement): void {
 function renderTasks(): void {
   const tasksContainer = document.getElementById('tasks-container');
   if (!tasksContainer) return;
+
+  // 如果是已删除过滤器，渲染已删除的任务
+  if (appState.filter === 'deleted') {
+    renderDeletedTasks(tasksContainer);
+    return;
+  }
 
   let filteredTasks = appState.tasks.filter(task => {
     if (appState.filter === 'active') return !task.completed;
@@ -214,11 +217,80 @@ function renderTasks(): void {
   });
 }
 
+// 渲染已删除的任务
+function renderDeletedTasks(container: HTMLElement): void {
+  if (appState.deletedTasks.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state fade-in" style="text-align: center; padding: 3rem 1rem; color: var(--muted);">
+        <div style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.5;">○</div>
+        <p style="font-style: italic;">回收站为空</p>
+      </div>
+    `;
+    return;
+  }
+
+  // 按删除时间倒序排列
+  const sortedTasks = [...appState.deletedTasks].sort((a, b) => 
+    (b.deletedAt || 0) - (a.deletedAt || 0)
+  );
+
+  container.innerHTML = sortedTasks.map((task, index) => {
+    const deletedDate = task.deletedAt ? new Date(task.deletedAt).toLocaleDateString('zh-CN') : '';
+    
+    return `
+    <div class="task-item slide-in deleted-task" 
+         data-id="${task.id}" 
+         style="animation-delay: ${index * 0.05}s; opacity: 0.7; border-left-color: var(--muted);">
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
+          <span class="task-text" style="font-size: 0.95rem; ${task.completed ? 'text-decoration: line-through; color: var(--muted);' : ''}">
+            ${task.important ? '<span style="color: #c9a87c; margin-right: 0.25rem;">★</span>' : ''}${escapeHtml(task.text)}
+          </span>
+          <span style="font-size: 0.75rem; color: var(--muted);">
+            删除于 ${deletedDate}
+          </span>
+        </div>
+        <button class="restore-btn" data-action="restore" data-id="${task.id}" 
+                style="background: none; border: 1px solid var(--border); color: var(--ink-medium); 
+                       cursor: pointer; font-size: 0.8rem; padding: 0.25rem 0.75rem; 
+                       border-radius: 1rem; transition: all 0.3s;">
+          恢复
+        </button>
+        <button class="permanent-delete-btn" data-action="permanent-delete" data-id="${task.id}" 
+                style="background: none; border: none; color: #c97070; cursor: pointer; 
+                       font-size: 1.25rem; opacity: 0; transition: opacity 0.3s; padding: 0 0.5rem;">
+          ×
+        </button>
+      </div>
+    </div>
+  `}).join('');
+
+  // 添加悬停显示永久删除按钮
+  container.querySelectorAll('.deleted-task').forEach(item => {
+    const deleteBtn = item.querySelector('.permanent-delete-btn') as HTMLElement;
+    item.addEventListener('mouseenter', () => {
+      if (deleteBtn) deleteBtn.style.opacity = '1';
+    });
+    item.addEventListener('mouseleave', () => {
+      if (deleteBtn) deleteBtn.style.opacity = '0';
+    });
+  });
+}
+
 // 更新统计信息
 function updateStats(): void {
   const totalEl = document.getElementById('total-count');
   const completedEl = document.getElementById('completed-count');
   const activeEl = document.getElementById('active-count');
+
+  // 如果是已删除过滤器，显示回收站统计
+  if (appState.filter === 'deleted') {
+    const deletedCount = appState.deletedTasks.length;
+    if (totalEl) totalEl.textContent = deletedCount.toString();
+    if (completedEl) completedEl.textContent = '-';
+    if (activeEl) activeEl.textContent = '-';
+    return;
+  }
 
   // 使用与 renderTasks 相同的分类筛选逻辑
   let categoryTasks: Task[];
@@ -299,7 +371,7 @@ function restoreTask(id: string): void {
     appState.tasks.unshift(task);
     appState.deletedTasks = appState.deletedTasks.filter(t => t.id !== id);
     saveToStorage(appState);
-    renderTrash();
+    renderTasks();
     updateTrashCount();
   }
 }
@@ -308,7 +380,7 @@ function restoreTask(id: string): void {
 function permanentDeleteTask(id: string): void {
   appState.deletedTasks = appState.deletedTasks.filter(t => t.id !== id);
   saveToStorage(appState);
-  renderTrash();
+  renderTasks();
   updateTrashCount();
 }
 
@@ -316,117 +388,32 @@ function permanentDeleteTask(id: string): void {
 function emptyTrash(): void {
   appState.deletedTasks = [];
   saveToStorage(appState);
-  renderTrash();
+  renderTasks();
   updateTrashCount();
 }
 
 // 更新回收站计数
+// 更新回收站计数（已删除任务数量）
 function updateTrashCount(): void {
-  const countEl = document.getElementById('trash-count');
-  const emptyTrashContainer = document.getElementById('empty-trash-btn-container');
-  
-  if (countEl) {
+  // 更新"已删除"按钮上的数字显示
+  const deletedBtn = document.querySelector('[data-filter="deleted"]');
+  if (deletedBtn) {
     const count = appState.deletedTasks.length;
-    countEl.textContent = count > 0 ? `(${count})` : '';
+    const countSpan = deletedBtn.querySelector('.deleted-count');
+    if (count > 0) {
+      if (!countSpan) {
+        const span = document.createElement('span');
+        span.className = 'deleted-count';
+        span.style.cssText = 'margin-left: 0.25rem; font-size: 0.7rem; opacity: 0.7;';
+        span.textContent = `(${count})`;
+        deletedBtn.appendChild(span);
+      } else {
+        countSpan.textContent = `(${count})`;
+      }
+    } else if (countSpan) {
+      countSpan.remove();
+    }
   }
-  
-  if (emptyTrashContainer) {
-    emptyTrashContainer.style.display = appState.deletedTasks.length > 0 ? 'block' : 'none';
-  }
-}
-
-// 切换视图
-function switchView(view: 'main' | 'trash'): void {
-  appState.view = view;
-  saveToStorage(appState);
-  updateViewUI();
-  if (view === 'main') {
-    renderTasks();
-    updateStats();
-  } else {
-    renderTrash();
-  }
-}
-
-// 更新视图UI
-function updateViewUI(): void {
-  const mainView = document.getElementById('main-view');
-  const trashView = document.getElementById('trash-view');
-  const trashBtn = document.getElementById('trash-btn');
-  
-  if (appState.view === 'main') {
-    if (mainView) mainView.style.display = 'block';
-    if (trashView) trashView.style.display = 'none';
-    if (trashBtn) trashBtn.classList.remove('active');
-  } else {
-    if (mainView) mainView.style.display = 'none';
-    if (trashView) trashView.style.display = 'block';
-    if (trashBtn) trashBtn.classList.add('active');
-  }
-}
-
-// 渲染回收站
-function renderTrash(): void {
-  const trashContainer = document.getElementById('trash-container');
-  if (!trashContainer) return;
-
-  if (appState.deletedTasks.length === 0) {
-    trashContainer.innerHTML = `
-      <div class="empty-state fade-in" style="text-align: center; padding: 3rem 1rem; color: var(--muted);">
-        <div style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.5;">○</div>
-        <p style="font-style: italic;">回收站为空</p>
-      </div>
-    `;
-    return;
-  }
-
-  // 按删除时间倒序排列
-  const sortedTasks = [...appState.deletedTasks].sort((a, b) => 
-    (b.deletedAt || 0) - (a.deletedAt || 0)
-  );
-
-  trashContainer.innerHTML = sortedTasks.map((task, index) => {
-    const dateDisplay = formatDate(task.dueDate);
-    const deletedDate = task.deletedAt ? new Date(task.deletedAt).toLocaleDateString('zh-CN') : '';
-    
-    return `
-    <div class="task-item slide-in deleted-task" 
-         data-id="${task.id}" 
-         style="animation-delay: ${index * 0.05}s; opacity: 0.7; border-left-color: var(--muted);">
-      <div style="display: flex; align-items: center; gap: 1rem;">
-        <div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
-          <span class="task-text" style="font-size: 0.95rem; ${task.completed ? 'text-decoration: line-through; color: var(--muted);' : ''}">
-            ${task.important ? '<span style="color: #c9a87c; margin-right: 0.25rem;">★</span>' : ''}${escapeHtml(task.text)}
-          </span>
-          <span style="font-size: 0.75rem; color: var(--muted);">
-            删除于 ${deletedDate}
-          </span>
-        </div>
-        <button class="restore-btn" data-action="restore" data-id="${task.id}" 
-                style="background: none; border: 1px solid var(--border); color: var(--ink-medium); 
-                       cursor: pointer; font-size: 0.8rem; padding: 0.25rem 0.75rem; 
-                       border-radius: 1rem; transition: all 0.3s;">
-          恢复
-        </button>
-        <button class="permanent-delete-btn" data-action="permanent-delete" data-id="${task.id}" 
-                style="background: none; border: none; color: #c97070; cursor: pointer; 
-                       font-size: 1.25rem; opacity: 0; transition: opacity 0.3s; padding: 0 0.5rem;">
-          ×
-        </button>
-      </div>
-    </div>
-  `}).join('');
-
-  // 添加悬停显示永久删除按钮
-  trashContainer.querySelectorAll('.deleted-task').forEach(item => {
-    const deleteBtn = item.querySelector('.permanent-delete-btn') as HTMLElement;
-    item.addEventListener('mouseenter', () => {
-      if (deleteBtn) deleteBtn.style.opacity = '1';
-    });
-    item.addEventListener('mouseleave', () => {
-      if (deleteBtn) deleteBtn.style.opacity = '0';
-    });
-  });
 }
 
 // 切换分类
@@ -466,11 +453,12 @@ function updateCategoryUI(): void {
 }
 
 // 切换过滤器
-function switchFilter(filter: 'all' | 'active' | 'completed'): void {
+function switchFilter(filter: 'all' | 'active' | 'completed' | 'deleted'): void {
   appState.filter = filter;
   saveToStorage(appState);
   updateFilterUI();
   renderTasks();
+  updateStats();
 }
 
 // 更新过滤器 UI
@@ -524,11 +512,9 @@ export function initApp(): void {
 
       <!-- 主要内容 -->
       <main style="flex: 1; max-width: 640px; width: 100%; margin: 0 auto; padding: 0 1.5rem 3rem;">
-        <!-- 主视图 -->
-        <div id="main-view">
-          <!-- 分类标签 -->
-          <div class="fade-in delay-1" style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border);">
-            <button class="category-btn" data-category="today" 
+        <!-- 分类标签 -->
+        <div class="fade-in delay-1" style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border);">
+          <button class="category-btn" data-category="today" 
                     style="background: none; border: none; padding: 0.75rem 0; cursor: pointer; 
                            font-size: 0.875rem; letter-spacing: 0.1em; border-bottom: 2px solid transparent; 
                            transition: all 0.3s; margin-bottom: -1px;">
@@ -612,6 +598,12 @@ export function initApp(): void {
                            color: var(--muted); transition: all 0.3s;">
               已完成
             </button>
+            <button class="filter-btn" data-filter="deleted"
+                    style="background: transparent; border: none; padding: 0.25rem 0.75rem; 
+                           border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
+                           color: var(--muted); transition: all 0.3s;">
+              已删除
+            </button>
           </div>
 
           <!-- 任务列表 -->
@@ -638,54 +630,13 @@ export function initApp(): void {
             </div>
           </div>
         </div>
-
-        <!-- 回收站视图 -->
-        <div id="trash-view" style="display: none;">
-          <!-- 回收站标题 -->
-          <div class="fade-in" style="text-align: center; margin-bottom: 2rem; display: flex; align-items: center; justify-content: center; gap: 1rem;">
-            <button id="back-to-main" 
-                    style="background: none; border: none; color: var(--muted); cursor: pointer; 
-                           font-size: 0.875rem; display: flex; align-items: center; gap: 0.25rem;">
-              ← 返回
-            </button>
-            <h2 style="font-family: 'Noto Serif SC', serif; font-size: 1.25rem; 
-                font-weight: 400; color: var(--ink-medium); letter-spacing: 0.15em;">
-              回收站
-            </h2>
-          </div>
-
-          <!-- 清空回收站按钮 -->
-          <div id="empty-trash-btn-container" style="text-align: center; margin-bottom: 1.5rem; display: none;">
-            <button id="empty-trash-btn" class="zen-btn" style="font-size: 0.8rem; color: #c97070; border-color: #e8c9c9;">
-              清空回收站
-            </button>
-          </div>
-
-          <!-- 回收站列表 -->
-          <div id="trash-container" class="fade-in">
-            <!-- 已删除的任务将在这里渲染 -->
-          </div>
-        </div>
       </main>
 
       <!-- 底部 -->
       <footer style="text-align: center; padding: 1.5rem; color: var(--muted); font-size: 0.75rem;">
-        <div style="display: flex; align-items: center; justify-content: center; gap: 1.5rem;">
-          <span class="zen-dot"></span>
-          <span style="letter-spacing: 0.1em;">专注当下，静心完成</span>
-          <span class="zen-dot"></span>
-          <!-- 回收站按钮 -->
-          <button id="trash-btn" 
-                  style="background: none; border: none; color: var(--muted); cursor: pointer; 
-                         display: flex; align-items: center; gap: 0.25rem; transition: all 0.3s;
-                         font-size: 0.75rem; font-family: inherit;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-            </svg>
-            <span id="trash-count"></span>
-          </button>
-        </div>
+        <span class="zen-dot" style="margin-right: 0.5rem;"></span>
+        <span style="letter-spacing: 0.1em;">专注当下，静心完成</span>
+        <span class="zen-dot" style="margin-left: 0.5rem;"></span>
       </footer>
     </div>
   `;
@@ -693,7 +644,6 @@ export function initApp(): void {
   // 初始化 UI 状态
   updateCategoryUI();
   updateFilterUI();
-  updateViewUI();
   renderTasks();
   updateStats();
   updateTrashCount();
@@ -739,6 +689,10 @@ function bindEvents(): void {
         createRipple(e, target);
       } else if (action === 'delete' && id) {
         deleteTask(id);
+      } else if (action === 'restore' && id) {
+        restoreTask(id);
+      } else if (action === 'permanent-delete' && id) {
+        permanentDeleteTask(id);
       }
     });
   }
@@ -754,7 +708,7 @@ function bindEvents(): void {
   // 过滤器切换
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const filter = btn.getAttribute('data-filter') as 'all' | 'active' | 'completed';
+      const filter = btn.getAttribute('data-filter') as 'all' | 'active' | 'completed' | 'deleted';
       if (filter) switchFilter(filter);
     });
   });
@@ -767,48 +721,6 @@ function bindEvents(): void {
     });
     input.addEventListener('blur', () => {
       input.parentElement!.style.borderBottomColor = 'var(--border)';
-    });
-  }
-
-  // 回收站按钮
-  const trashBtn = document.getElementById('trash-btn');
-  if (trashBtn) {
-    trashBtn.addEventListener('click', () => {
-      switchView('trash');
-    });
-  }
-
-  // 返回主视图按钮
-  const backBtn = document.getElementById('back-to-main');
-  if (backBtn) {
-    backBtn.addEventListener('click', () => {
-      switchView('main');
-    });
-  }
-
-  // 清空回收站按钮
-  const emptyTrashBtn = document.getElementById('empty-trash-btn');
-  if (emptyTrashBtn) {
-    emptyTrashBtn.addEventListener('click', () => {
-      if (confirm('确定要清空回收站吗？此操作不可撤销。')) {
-        emptyTrash();
-      }
-    });
-  }
-
-  // 回收站容器事件委托
-  const trashContainer = document.getElementById('trash-container');
-  if (trashContainer) {
-    trashContainer.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement;
-      const action = target.getAttribute('data-action');
-      const id = target.getAttribute('data-id');
-
-      if (action === 'restore' && id) {
-        restoreTask(id);
-      } else if (action === 'permanent-delete' && id) {
-        permanentDeleteTask(id);
-      }
     });
   }
 }
