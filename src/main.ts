@@ -5,6 +5,8 @@ interface Task {
   completed: boolean;
   createdAt: number;
   category: 'today' | 'important' | 'someday';
+  important: boolean;
+  dueDate: string | null; // 格式: YYYY-MM-DD
 }
 
 // 应用状态
@@ -22,7 +24,16 @@ function loadFromStorage(): AppState {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     if (data) {
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      // 兼容旧数据，为旧任务添加默认值
+      if (parsed.tasks) {
+        parsed.tasks = parsed.tasks.map((task: Task) => ({
+          ...task,
+          important: task.important ?? false,
+          dueDate: task.dueDate ?? null
+        }));
+      }
+      return parsed;
     }
   } catch (e) {
     console.error('Failed to load from storage:', e);
@@ -46,6 +57,38 @@ function saveToStorage(state: AppState): void {
 // 生成唯一ID
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+// 格式化日期显示
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '';
+  
+  const date = new Date(dateStr);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  const dateOnly = date.toDateString();
+  
+  if (dateOnly === today.toDateString()) {
+    return '今天';
+  } else if (dateOnly === tomorrow.toDateString()) {
+    return '明天';
+  } else {
+    // 格式化为中文日期
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    return `${month}月${day}日`;
+  }
+}
+
+// 判断是否过期
+function isOverdue(dateStr: string | null): boolean {
+  if (!dateStr) return false;
+  const date = new Date(dateStr);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date < today;
 }
 
 // 应用状态实例
@@ -83,9 +126,10 @@ function renderTasks(): void {
   // 按分类筛选
   filteredTasks = filteredTasks.filter(task => task.category === appState.category);
 
-  // 按创建时间倒序排列，未完成的在前
+  // 按创建时间倒序排列，未完成的在前，重要的优先
   filteredTasks.sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
+    if (a.important !== b.important) return a.important ? -1 : 1;
     return b.createdAt - a.createdAt;
   });
 
@@ -99,15 +143,28 @@ function renderTasks(): void {
     return;
   }
 
-  tasksContainer.innerHTML = filteredTasks.map((task, index) => `
-    <div class="task-item slide-in ${task.completed ? 'completed' : ''}" 
+  tasksContainer.innerHTML = filteredTasks.map((task, index) => {
+    const dateDisplay = formatDate(task.dueDate);
+    const overdue = !task.completed && isOverdue(task.dueDate);
+    
+    return `
+    <div class="task-item slide-in ${task.completed ? 'completed' : ''} ${task.important ? 'important' : ''}" 
          data-id="${task.id}" 
-         style="animation-delay: ${index * 0.05}s">
+         style="animation-delay: ${index * 0.05}s; ${task.important ? 'border-left-color: #c9a87c;' : ''}">
       <div style="display: flex; align-items: center; gap: 1rem;">
         <div class="zen-checkbox ${task.completed ? 'checked' : ''}" 
              data-action="toggle" 
              data-id="${task.id}"></div>
-        <span class="task-text" style="flex: 1; font-size: 0.95rem;">${escapeHtml(task.text)}</span>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
+          <span class="task-text" style="font-size: 0.95rem; ${task.important ? 'font-weight: 500;' : ''}">
+            ${task.important ? '<span style="color: #c9a87c; margin-right: 0.25rem;">★</span>' : ''}${escapeHtml(task.text)}
+          </span>
+          ${dateDisplay ? `
+            <span style="font-size: 0.75rem; color: ${overdue ? '#c97070' : 'var(--muted)'};">
+              ${overdue ? '已过期 · ' : ''}${dateDisplay}
+            </span>
+          ` : ''}
+        </div>
         <button class="delete-btn" data-action="delete" data-id="${task.id}" 
                 style="background: none; border: none; color: var(--muted); cursor: pointer; 
                        font-size: 1.25rem; opacity: 0; transition: opacity 0.3s; padding: 0 0.5rem;">
@@ -115,7 +172,7 @@ function renderTasks(): void {
         </button>
       </div>
     </div>
-  `).join('');
+  `}).join('');
 
   // 添加悬停显示删除按钮
   tasksContainer.querySelectorAll('.task-item').forEach(item => {
@@ -153,7 +210,7 @@ function escapeHtml(text: string): string {
 }
 
 // 添加任务
-function addTask(text: string): void {
+function addTask(text: string, important: boolean, dueDate: string | null): void {
   if (!text.trim()) return;
 
   const newTask: Task = {
@@ -161,7 +218,9 @@ function addTask(text: string): void {
     text: text.trim(),
     completed: false,
     createdAt: Date.now(),
-    category: appState.category
+    category: appState.category,
+    important,
+    dueDate
   };
 
   appState.tasks.unshift(newTask);
@@ -249,6 +308,12 @@ function updateFilterUI(): void {
   });
 }
 
+// 获取今天的日期字符串 (YYYY-MM-DD)
+function getTodayString(): string {
+  const today = new Date();
+  return today.toISOString().split('T')[0];
+}
+
 // 初始化应用
 export function initApp(): void {
   const app = document.getElementById('app');
@@ -310,13 +375,37 @@ export function initApp(): void {
 
         <!-- 添加任务 -->
         <div class="fade-in delay-2 zen-card" style="margin-bottom: 2rem;">
-          <form id="task-form" style="display: flex; gap: 1rem; align-items: flex-end;">
-            <div style="flex: 1;">
+          <form id="task-form">
+            <div style="margin-bottom: 1rem;">
               <input type="text" id="task-input" class="zen-input" 
                      placeholder="写下你的思绪..." 
                      autocomplete="off">
             </div>
-            <button type="submit" class="zen-btn primary">添加</button>
+            <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+              <!-- 重要选项 -->
+              <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
+                <input type="checkbox" id="important-checkbox" 
+                       style="width: 16px; height: 16px; accent-color: #c9a87c; cursor: pointer;">
+                <span style="font-size: 0.85rem; color: var(--muted);">
+                  <span style="color: #c9a87c;">★</span> 重要
+                </span>
+              </label>
+              <!-- 日期选择 -->
+              <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--muted);">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/>
+                  <line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                <input type="date" id="due-date-input" 
+                       style="border: none; background: transparent; font-size: 0.85rem; 
+                              color: var(--foreground); cursor: pointer; font-family: inherit;
+                              outline: none;">
+              </label>
+              <!-- 添加按钮 -->
+              <button type="submit" class="zen-btn primary" style="margin-left: auto;">添加</button>
+            </div>
           </form>
         </div>
 
@@ -394,9 +483,17 @@ function bindEvents(): void {
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const input = document.getElementById('task-input') as HTMLInputElement;
+      const importantCheckbox = document.getElementById('important-checkbox') as HTMLInputElement;
+      const dueDateInput = document.getElementById('due-date-input') as HTMLInputElement;
+      
       if (input && input.value.trim()) {
-        addTask(input.value);
+        const important = importantCheckbox?.checked ?? false;
+        const dueDate = dueDateInput?.value || null;
+        
+        addTask(input.value, important, dueDate);
         input.value = '';
+        if (importantCheckbox) importantCheckbox.checked = false;
+        if (dueDateInput) dueDateInput.value = '';
         input.focus();
       }
     });
