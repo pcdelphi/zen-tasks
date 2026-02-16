@@ -14,8 +14,8 @@ interface Task {
 interface AppState {
   tasks: Task[];
   deletedTasks: Task[]; // 已删除任务
-  filter: 'all' | 'active' | 'completed' | 'deleted';
-  category: 'today' | 'important' | 'someday';
+  statusFilter: 'today' | 'active' | 'completed' | 'deleted'; // 主筛选（单选）
+  tags: ('all' | 'important' | 'someday')[]; // 多选标签
 }
 
 // 本地存储键名
@@ -42,11 +42,34 @@ function loadFromStorage(): AppState {
           dueDate: task.dueDate ?? null
         }));
       }
+      
+      // 兼容旧的状态结构
+      let statusFilter: 'today' | 'active' | 'completed' | 'deleted' = 'today';
+      let tags: ('all' | 'important' | 'someday')[] = ['all'];
+      
+      if (parsed.statusFilter) {
+        statusFilter = parsed.statusFilter;
+      } else if (parsed.filter) {
+        // 兼容旧的 filter 字段
+        statusFilter = parsed.filter;
+      }
+      
+      if (parsed.tags) {
+        tags = parsed.tags;
+      } else if (parsed.category) {
+        // 兼容旧的 category 字段
+        if (parsed.category === 'today') {
+          tags = ['all'];
+        } else {
+          tags = [parsed.category];
+        }
+      }
+      
       return {
         tasks: parsed.tasks || [],
         deletedTasks: parsed.deletedTasks || [],
-        filter: parsed.filter || 'all',
-        category: parsed.category || 'today'
+        statusFilter,
+        tags
       };
     }
   } catch (e) {
@@ -55,8 +78,8 @@ function loadFromStorage(): AppState {
   return {
     tasks: [],
     deletedTasks: [],
-    filter: 'all',
-    category: 'today'
+    statusFilter: 'today',
+    tags: ['all']
   };
 }
 
@@ -133,28 +156,31 @@ function renderTasks(): void {
   if (!tasksContainer) return;
 
   // 如果是已删除过滤器，渲染已删除的任务
-  if (appState.filter === 'deleted') {
+  if (appState.statusFilter === 'deleted') {
     renderDeletedTasks(tasksContainer);
     return;
   }
 
+  // 按状态筛选
   let filteredTasks = appState.tasks.filter(task => {
-    if (appState.filter === 'active') return !task.completed;
-    if (appState.filter === 'completed') return task.completed;
+    if (appState.statusFilter === 'active') return !task.completed;
+    if (appState.statusFilter === 'completed') return task.completed;
+    if (appState.statusFilter === 'today') {
+      // 今日：今天到期或今天创建的任务
+      const today = new Date().toISOString().split('T')[0];
+      return task.dueDate === today || 
+             (task.dueDate === null && new Date(task.createdAt).toDateString() === new Date().toDateString());
+    }
     return true;
   });
 
-  // 按分类筛选
-  // 重要：显示所有标记为重要的任务
-  // 某天：显示所有有截止日期的任务
-  // 今日：按原有分类显示
-  if (appState.category === 'important') {
-    filteredTasks = filteredTasks.filter(task => task.important === true);
-  } else if (appState.category === 'someday') {
-    filteredTasks = filteredTasks.filter(task => task.dueDate !== null);
-  } else {
-    // 今日：按原分类筛选
-    filteredTasks = filteredTasks.filter(task => task.category === appState.category);
+  // 按标签多选筛选
+  if (!appState.tags.includes('all')) {
+    filteredTasks = filteredTasks.filter(task => {
+      const matchImportant = appState.tags.includes('important') && task.important;
+      const matchSomeday = appState.tags.includes('someday') && task.dueDate !== null;
+      return matchImportant || matchSomeday;
+    });
   }
 
   // 按创建时间倒序排列，未完成的在前，重要的优先
@@ -284,7 +310,7 @@ function updateStats(): void {
   const activeEl = document.getElementById('active-count');
 
   // 如果是已删除过滤器，显示回收站统计
-  if (appState.filter === 'deleted') {
+  if (appState.statusFilter === 'deleted') {
     const deletedCount = appState.deletedTasks.length;
     if (totalEl) totalEl.textContent = deletedCount.toString();
     if (completedEl) completedEl.textContent = '-';
@@ -292,18 +318,29 @@ function updateStats(): void {
     return;
   }
 
-  // 使用与 renderTasks 相同的分类筛选逻辑
-  let categoryTasks: Task[];
-  if (appState.category === 'important') {
-    categoryTasks = appState.tasks.filter(t => t.important === true);
-  } else if (appState.category === 'someday') {
-    categoryTasks = appState.tasks.filter(t => t.dueDate !== null);
-  } else {
-    categoryTasks = appState.tasks.filter(t => t.category === appState.category);
+  // 使用与 renderTasks 相同的筛选逻辑
+  let filteredTasks = appState.tasks.filter(task => {
+    if (appState.statusFilter === 'active') return !task.completed;
+    if (appState.statusFilter === 'completed') return task.completed;
+    if (appState.statusFilter === 'today') {
+      const today = new Date().toISOString().split('T')[0];
+      return task.dueDate === today || 
+             (task.dueDate === null && new Date(task.createdAt).toDateString() === new Date().toDateString());
+    }
+    return true;
+  });
+
+  // 按标签筛选
+  if (!appState.tags.includes('all')) {
+    filteredTasks = filteredTasks.filter(task => {
+      const matchImportant = appState.tags.includes('important') && task.important;
+      const matchSomeday = appState.tags.includes('someday') && task.dueDate !== null;
+      return matchImportant || matchSomeday;
+    });
   }
   
-  const total = categoryTasks.length;
-  const completed = categoryTasks.filter(t => t.completed).length;
+  const total = filteredTasks.length;
+  const completed = filteredTasks.filter(t => t.completed).length;
   const active = total - completed;
 
   if (totalEl) totalEl.textContent = total.toString();
@@ -322,14 +359,16 @@ function escapeHtml(text: string): string {
 function addTask(text: string, important: boolean, dueDate: string | null): void {
   if (!text.trim()) return;
 
+  const today = new Date().toISOString().split('T')[0];
+  
   const newTask: Task = {
     id: generateId(),
     text: text.trim(),
     completed: false,
     createdAt: Date.now(),
-    category: appState.category,
+    category: 'today',
     important,
-    dueDate
+    dueDate: dueDate || today
   };
 
   appState.tasks.unshift(newTask);
@@ -443,55 +482,64 @@ function updateTrashCount(): void {
 }
 
 // 切换分类
-function switchCategory(category: 'today' | 'important' | 'someday'): void {
-  appState.category = category;
+// 切换状态筛选（单选）
+function switchStatusFilter(filter: 'today' | 'active' | 'completed' | 'deleted'): void {
+  appState.statusFilter = filter;
   saveToStorage(appState);
-  updateCategoryUI();
+  updateFilterUI();
   renderTasks();
   updateStats();
+  updateTrashCount();
 }
 
-// 更新分类 UI
-function updateCategoryUI(): void {
-  document.querySelectorAll('.category-btn').forEach(btn => {
-    const btnCategory = btn.getAttribute('data-category');
-    if (btnCategory === appState.category) {
-      btn.classList.add('active');
-      (btn as HTMLElement).style.borderBottomColor = 'var(--ink-medium)';
-      (btn as HTMLElement).style.color = 'var(--ink-dark)';
+// 切换标签（多选）
+function toggleTag(tag: 'all' | 'important' | 'someday'): void {
+  if (tag === 'all') {
+    // 点击"全部"时，清除其他选择
+    appState.tags = ['all'];
+  } else {
+    // 移除"全部"选择
+    appState.tags = appState.tags.filter(t => t !== 'all');
+    
+    // 切换当前标签
+    if (appState.tags.includes(tag)) {
+      appState.tags = appState.tags.filter(t => t !== tag);
+      // 如果没有任何选择，默认选择"全部"
+      if (appState.tags.length === 0) {
+        appState.tags = ['all'];
+      }
     } else {
-      btn.classList.remove('active');
-      (btn as HTMLElement).style.borderBottomColor = 'transparent';
-      (btn as HTMLElement).style.color = 'var(--muted)';
+      appState.tags.push(tag);
     }
-  });
-
-  // 更新标题
-  const titleEl = document.getElementById('category-title');
-  const titles = {
-    today: '今日之事',
-    important: '重要之事',
-    someday: '未来可期'
-  };
-  if (titleEl) {
-    titleEl.textContent = titles[appState.category];
   }
-}
-
-// 切换过滤器
-function switchFilter(filter: 'all' | 'active' | 'completed' | 'deleted'): void {
-  appState.filter = filter;
+  
   saveToStorage(appState);
   updateFilterUI();
   renderTasks();
   updateStats();
 }
 
-// 更新过滤器 UI
+// 更新筛选 UI
 function updateFilterUI(): void {
-  document.querySelectorAll('.filter-btn').forEach(btn => {
-    const btnFilter = btn.getAttribute('data-filter');
-    if (btnFilter === appState.filter) {
+  // 更新状态筛选按钮（单选）
+  document.querySelectorAll('.status-btn').forEach(btn => {
+    const btnFilter = btn.getAttribute('data-status');
+    if (btnFilter === appState.statusFilter) {
+      btn.classList.add('active');
+      (btn as HTMLElement).style.background = 'var(--sand)';
+      (btn as HTMLElement).style.color = 'var(--ink-dark)';
+    } else {
+      btn.classList.remove('active');
+      (btn as HTMLElement).style.background = 'transparent';
+      (btn as HTMLElement).style.color = 'var(--muted)';
+    }
+  });
+
+  // 更新标签按钮（多选）
+  document.querySelectorAll('.tag-btn').forEach(btn => {
+    const btnTag = btn.getAttribute('data-tag');
+    const isSelected = appState.tags.includes(btnTag as 'all' | 'important' | 'someday');
+    if (isSelected) {
       btn.classList.add('active');
       (btn as HTMLElement).style.background = 'var(--sand)';
       (btn as HTMLElement).style.color = 'var(--ink-dark)';
@@ -538,34 +586,60 @@ export function initApp(): void {
 
       <!-- 主要内容 -->
       <main style="flex: 1; max-width: 640px; width: 100%; margin: 0 auto; padding: 0 1.5rem 3rem;">
-        <!-- 分类标签与添加按钮 -->
-        <div class="fade-in delay-1" style="display: flex; justify-content: center; align-items: center; gap: 2rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border);">
-          <div style="display: flex; gap: 2rem;">
-            <button class="category-btn" data-category="today" 
-                    style="background: none; border: none; padding: 0.75rem 0; cursor: pointer; 
-                           font-size: 0.875rem; letter-spacing: 0.1em; border-bottom: 2px solid transparent; 
-                           transition: all 0.3s; margin-bottom: -1px;">
-              今日
-            </button>
-            <button class="category-btn" data-category="important"
-                    style="background: none; border: none; padding: 0.75rem 0; cursor: pointer; 
-                           font-size: 0.875rem; letter-spacing: 0.1em; border-bottom: 2px solid transparent; 
-                           transition: all 0.3s; margin-bottom: -1px;">
-              重要
-            </button>
-            <button class="category-btn" data-category="someday"
-                    style="background: none; border: none; padding: 0.75rem 0; cursor: pointer; 
-                           font-size: 0.875rem; letter-spacing: 0.1em; border-bottom: 2px solid transparent; 
-                           transition: all 0.3s; margin-bottom: -1px;">
-              某天
-            </button>
-          </div>
+        <!-- 状态筛选标签（单选） -->
+        <div class="fade-in delay-1" style="display: flex; justify-content: center; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem;">
+          <button class="status-btn" data-status="today"
+                  style="background: transparent; border: none; padding: 0.5rem 1rem; 
+                         border-radius: 1rem; cursor: pointer; font-size: 0.875rem; 
+                         color: var(--muted); transition: all 0.3s;">
+            今日
+          </button>
+          <button class="status-btn" data-status="active"
+                  style="background: transparent; border: none; padding: 0.5rem 1rem; 
+                         border-radius: 1rem; cursor: pointer; font-size: 0.875rem; 
+                         color: var(--muted); transition: all 0.3s;">
+            进行中
+          </button>
+          <button class="status-btn" data-status="completed"
+                  style="background: transparent; border: none; padding: 0.5rem 1rem; 
+                         border-radius: 1rem; cursor: pointer; font-size: 0.875rem; 
+                         color: var(--muted); transition: all 0.3s;">
+            已完成
+          </button>
+          <button class="status-btn" data-status="deleted"
+                  style="background: transparent; border: none; padding: 0.5rem 1rem; 
+                         border-radius: 1rem; cursor: pointer; font-size: 0.875rem; 
+                         color: var(--muted); transition: all 0.3s;">
+            已删除
+          </button>
           <button id="toggle-add-btn" 
                   style="background: var(--ink-medium); border: none; width: 28px; height: 28px; 
                          border-radius: 50%; color: white; cursor: pointer; font-size: 1.25rem; 
                          display: flex; align-items: center; justify-content: center; 
-                         transition: all 0.3s; margin-bottom: -1px;">
+                         transition: all 0.3s; margin-left: 0.5rem;">
             +
+          </button>
+        </div>
+
+        <!-- 标签筛选（多选） -->
+        <div class="fade-in delay-2" style="display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem;">
+          <button class="tag-btn" data-tag="all"
+                  style="background: transparent; border: 1px solid var(--border); padding: 0.25rem 0.75rem; 
+                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
+                         color: var(--muted); transition: all 0.3s;">
+            全部
+          </button>
+          <button class="tag-btn" data-tag="important"
+                  style="background: transparent; border: 1px solid var(--border); padding: 0.25rem 0.75rem; 
+                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
+                         color: var(--muted); transition: all 0.3s;">
+            <span style="color: #c9a87c;">★</span> 重要
+          </button>
+          <button class="tag-btn" data-tag="someday"
+                  style="background: transparent; border: 1px solid var(--border); padding: 0.25rem 0.75rem; 
+                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
+                         color: var(--muted); transition: all 0.3s;">
+            某天
           </button>
         </div>
 
@@ -605,35 +679,6 @@ export function initApp(): void {
                 <button type="submit" class="zen-btn primary" style="margin-left: auto;">添加</button>
               </div>
             </form>
-          </div>
-        </div>
-
-        <!-- 过滤器 -->
-        <div class="fade-in delay-3" style="display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem;">
-          <button class="filter-btn" data-filter="all"
-                  style="background: transparent; border: none; padding: 0.25rem 0.75rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
-                         color: var(--muted); transition: all 0.3s;">
-            全部
-          </button>
-          <button class="filter-btn" data-filter="active"
-                  style="background: transparent; border: none; padding: 0.25rem 0.75rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
-                         color: var(--muted); transition: all 0.3s;">
-            进行中
-          </button>
-          <button class="filter-btn" data-filter="completed"
-                  style="background: transparent; border: none; padding: 0.25rem 0.75rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
-                         color: var(--muted); transition: all 0.3s;">
-            已完成
-          </button>
-          <button class="filter-btn" data-filter="deleted"
-                  style="background: transparent; border: none; padding: 0.25rem 0.75rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
-                         color: var(--muted); transition: all 0.3s;">
-            已删除
-          </button>
         </div>
 
         <!-- 任务列表 -->
@@ -658,7 +703,6 @@ export function initApp(): void {
               <div style="font-size: 0.75rem; color: var(--muted); letter-spacing: 0.1em;">已完成</div>
             </div>
           </div>
-          </div>
         </div>
       </main>
 
@@ -672,7 +716,6 @@ export function initApp(): void {
   `;
 
   // 初始化 UI 状态
-  updateCategoryUI();
   updateFilterUI();
   renderTasks();
   updateStats();
@@ -735,19 +778,19 @@ function bindEvents(): void {
     });
   }
 
-  // 分类切换
-  document.querySelectorAll('.category-btn').forEach(btn => {
+  // 状态筛选切换（单选）
+  document.querySelectorAll('.status-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const category = btn.getAttribute('data-category') as 'today' | 'important' | 'someday';
-      if (category) switchCategory(category);
+      const status = btn.getAttribute('data-status') as 'today' | 'active' | 'completed' | 'deleted';
+      if (status) switchStatusFilter(status);
     });
   });
 
-  // 过滤器切换
-  document.querySelectorAll('.filter-btn').forEach(btn => {
+  // 标签切换（多选）
+  document.querySelectorAll('.tag-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const filter = btn.getAttribute('data-filter') as 'all' | 'active' | 'completed' | 'deleted';
-      if (filter) switchFilter(filter);
+      const tag = btn.getAttribute('data-tag') as 'all' | 'important' | 'someday';
+      if (tag) toggleTag(tag);
     });
   });
 
