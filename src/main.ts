@@ -124,7 +124,17 @@ function renderTasks(): void {
   });
 
   // 按分类筛选
-  filteredTasks = filteredTasks.filter(task => task.category === appState.category);
+  // 重要：显示所有标记为重要的任务
+  // 某天：显示所有有截止日期的任务
+  // 今日：按原有分类显示
+  if (appState.category === 'important') {
+    filteredTasks = filteredTasks.filter(task => task.important === true);
+  } else if (appState.category === 'someday') {
+    filteredTasks = filteredTasks.filter(task => task.dueDate !== null);
+  } else {
+    // 今日：按原分类筛选
+    filteredTasks = filteredTasks.filter(task => task.category === appState.category);
+  }
 
   // 按创建时间倒序排列，未完成的在前，重要的优先
   filteredTasks.sort((a, b) => {
@@ -192,7 +202,16 @@ function updateStats(): void {
   const completedEl = document.getElementById('completed-count');
   const activeEl = document.getElementById('active-count');
 
-  const categoryTasks = appState.tasks.filter(t => t.category === appState.category);
+  // 使用与 renderTasks 相同的分类筛选逻辑
+  let categoryTasks: Task[];
+  if (appState.category === 'important') {
+    categoryTasks = appState.tasks.filter(t => t.important === true);
+  } else if (appState.category === 'someday') {
+    categoryTasks = appState.tasks.filter(t => t.dueDate !== null);
+  } else {
+    categoryTasks = appState.tasks.filter(t => t.category === appState.category);
+  }
+  
   const total = categoryTasks.length;
   const completed = categoryTasks.filter(t => t.completed).length;
   const active = total - completed;
