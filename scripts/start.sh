@@ -8,7 +8,7 @@ DEPLOY_RUN_PORT="${DEPLOY_RUN_PORT:-$PORT}"
 start_service() {
     cd "${COZE_WORKSPACE_PATH}"
     echo "Starting HTTP service on port ${DEPLOY_RUN_PORT} for deploy..."
-    npx vite preview --port $DEPLOY_RUN_PORT
+    npx vite preview --port $DEPLOY_RUN_PORT --host
 }
 
 echo "Starting HTTP service on port ${DEPLOY_RUN_PORT} for deploy..."

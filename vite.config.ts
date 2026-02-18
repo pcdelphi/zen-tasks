@@ -4,6 +4,7 @@ export default defineConfig({
   server: {
     port: 5000,
     host: '0.0.0.0',
+    allowedHosts: ['.bytedance.net', '.coze-coding.bytedance.net'],
     hmr: {
       overlay: true,
       path: '/hot/vite-hmr',
@@ -15,6 +16,6 @@ export default defineConfig({
   preview: {
     port: 5000,
     host: '0.0.0.0',
-    allowedHosts: ['all'],
+    allowedHosts: ['.bytedance.net', '.coze-coding.bytedance.net'],
   },
 });
