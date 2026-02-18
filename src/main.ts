@@ -16,10 +16,12 @@ interface AppState {
   deletedTasks: Task[]; // 已删除任务
   statusFilter: 'all' | 'today' | 'active' | 'completed' | 'deleted'; // 主筛选（单选）
   tags: ('important' | 'someday')[]; // 多选标签
+  version?: number; // 数据版本
 }
 
 // 本地存储键名
 const STORAGE_KEY = 'zen-tasks-data';
+const DATA_VERSION = 2; // 数据版本号，用于迁移
 
 // 从本地存储加载数据
 function loadFromStorage(): AppState {
@@ -27,13 +29,31 @@ function loadFromStorage(): AppState {
     const data = localStorage.getItem(STORAGE_KEY);
     if (data) {
       const parsed = JSON.parse(data);
-      // 兼容旧数据，为旧任务添加默认值
+      
+      // 数据迁移：版本1 -> 版本2（清除自动设置的默认日期）
+      const currentVersion = parsed.version || 1;
+      
+      // 兼容旧任务数据
       if (parsed.tasks) {
         parsed.tasks = parsed.tasks.map((task: Task) => ({
           ...task,
           important: task.important ?? false,
           dueDate: task.dueDate ?? null
         }));
+        
+        // 版本迁移：如果任务的 dueDate 等于创建日期，清除它（这是之前自动设置的默认值）
+        if (currentVersion < 2) {
+          parsed.tasks = parsed.tasks.map((task: Task) => {
+            if (task.dueDate) {
+              const createdDate = new Date(task.createdAt).toISOString().split('T')[0];
+              // 如果日期等于创建日期，说明是自动设置的默认值，清除它
+              if (task.dueDate === createdDate) {
+                return { ...task, dueDate: null };
+              }
+            }
+            return task;
+          });
+        }
       }
       if (parsed.deletedTasks) {
         parsed.deletedTasks = parsed.deletedTasks.map((task: Task) => ({
@@ -61,12 +81,17 @@ function loadFromStorage(): AppState {
         tags = parsed.category === 'today' ? [] : [parsed.category];
       }
       
-      return {
+      // 保存迁移后的数据
+      const newState = {
         tasks: parsed.tasks || [],
         deletedTasks: parsed.deletedTasks || [],
         statusFilter,
-        tags
+        tags,
+        version: DATA_VERSION
       };
+      saveToStorage(newState);
+      
+      return newState;
     }
   } catch (e) {
     console.error('Failed to load from storage:', e);
@@ -75,14 +100,15 @@ function loadFromStorage(): AppState {
     tasks: [],
     deletedTasks: [],
     statusFilter: 'all',
-    tags: []
+    tags: [],
+    version: DATA_VERSION
   };
 }
 
 // 保存到本地存储
 function saveToStorage(state: AppState): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, version: DATA_VERSION }));
   } catch (e) {
     console.error('Failed to save to storage:', e);
   }
@@ -954,7 +980,8 @@ function bindEvents(): void {
       
       if (input && input.value.trim()) {
         const important = importantCheckbox?.checked ?? false;
-        const dueDate = dueDateInput?.value || null;
+        // 只有当日期输入框有值时才使用，否则为 null
+        const dueDate = (dueDateInput?.value && dueDateInput.value.trim()) ? dueDateInput.value : null;
         
         addTask(input.value, important, dueDate);
         input.value = '';
@@ -976,7 +1003,8 @@ function bindEvents(): void {
       
       if (input && input.value.trim()) {
         const important = importantCheckbox?.checked ?? false;
-        const dueDate = dueDateInput?.value || null;
+        // 只有当日期输入框有值时才使用，否则为 null
+        const dueDate = (dueDateInput?.value && dueDateInput.value.trim()) ? dueDateInput.value : null;
         
         addTask(input.value, important, dueDate);
         input.value = '';
