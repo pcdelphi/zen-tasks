@@ -279,3 +279,249 @@ body {
 .delay-2 { animation-delay: 0.2s; }
 .delay-3 { animation-delay: 0.3s; }
 .delay-4 { animation-delay: 0.4s; }
+
+/* ========== PC端响应式布局 ========== */
+@media (min-width: 768px) {
+  body {
+    background: linear-gradient(135deg, var(--background) 0%, var(--sand) 100%);
+  }
+
+  .app-container {
+    display: flex !important;
+    flex-direction: row !important;
+  }
+
+  /* 左侧边栏 */
+  .pc-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 280px;
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    padding: 2rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 2px 0 20px rgba(0,0,0,0.03);
+    z-index: 50;
+  }
+
+  /* 主内容区 */
+  .pc-main {
+    margin-left: 280px;
+    flex: 1;
+    min-height: 100vh;
+    padding: 2rem 3rem;
+  }
+
+  /* 侧边栏标题 */
+  .pc-sidebar .sidebar-header {
+    text-align: left;
+    padding: 0;
+    margin-bottom: 2rem;
+  }
+
+  .pc-sidebar .sidebar-header h1 {
+    font-size: 1.75rem;
+    margin-bottom: 0.25rem;
+  }
+
+  /* 侧边栏统计 */
+  .pc-sidebar .sidebar-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--sand);
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+  }
+
+  .pc-sidebar .sidebar-stats > div {
+    text-align: center;
+  }
+
+  .pc-sidebar .sidebar-stats .stat-number {
+    font-size: 1.5rem;
+    font-weight: 300;
+    color: var(--ink-medium);
+  }
+
+  .pc-sidebar .sidebar-stats .stat-label {
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  /* 侧边栏筛选区 */
+  .sidebar-filters {
+    flex: 1;
+  }
+
+  .filter-section {
+    margin-bottom: 1.5rem;
+  }
+
+  .filter-section-title {
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+    padding-left: 0.5rem;
+  }
+
+  /* PC端状态按钮 */
+  .pc-status-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--foreground);
+    transition: all 0.2s ease;
+    text-align: left;
+    margin-bottom: 0.25rem;
+  }
+
+  .pc-status-btn:hover {
+    background: var(--sand);
+  }
+
+  .pc-status-btn.active {
+    background: var(--ink-medium);
+    color: white;
+  }
+
+  .pc-status-btn .status-icon {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+  }
+
+  .pc-status-btn .status-count {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--muted);
+    background: var(--sand);
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    min-width: 24px;
+    text-align: center;
+  }
+
+  .pc-status-btn.active .status-count {
+    background: rgba(255,255,255,0.2);
+    color: white;
+  }
+
+  /* PC端标签按钮 */
+  .pc-tag-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--muted);
+    transition: all 0.2s ease;
+    margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .pc-tag-btn:hover {
+    border-color: var(--ink-light);
+    color: var(--foreground);
+  }
+
+  .pc-tag-btn.active {
+    background: var(--sand);
+    border-color: var(--sand);
+    color: var(--ink-dark);
+  }
+
+  /* PC端添加按钮 */
+  .pc-add-btn {
+    width: 100%;
+    padding: 1rem;
+    background: var(--ink-medium);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+    margin-top: auto;
+  }
+
+  .pc-add-btn:hover {
+    background: var(--ink-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(139,115,85,0.3);
+  }
+
+  /* PC端任务列表容器 */
+  .pc-tasks-container {
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  /* PC端任务项 */
+  .task-item {
+    padding: 1.25rem 1.75rem;
+    border-radius: 12px;
+    margin-bottom: 0.75rem;
+  }
+
+  /* PC端空状态 */
+  .empty-state {
+    padding: 4rem 2rem !important;
+  }
+
+  .empty-state .empty-icon {
+    font-size: 4rem !important;
+    margin-bottom: 1.5rem !important;
+  }
+
+  .empty-state p {
+    font-size: 1rem !important;
+  }
+
+  /* 隐藏移动端元素 */
+  .mobile-only {
+    display: none !important;
+  }
+
+  /* PC端添加面板 */
+  #add-task-panel {
+    max-width: 700px;
+    margin: 0 auto 1.5rem;
+  }
+
+  #add-task-panel .zen-card {
+    padding: 1.5rem 2rem;
+  }
+}
+
+/* ========== 移动端隐藏PC元素 ========== */
+@media (max-width: 767px) {
+  .pc-only {
+    display: none !important;
+  }
+}
