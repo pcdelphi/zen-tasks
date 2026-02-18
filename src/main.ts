@@ -402,8 +402,6 @@ function escapeHtml(text: string): string {
 // 添加任务
 function addTask(text: string, important: boolean, dueDate: string | null): void {
   if (!text.trim()) return;
-
-  const today = new Date().toISOString().split('T')[0];
   
   const newTask: Task = {
     id: generateId(),
@@ -412,7 +410,7 @@ function addTask(text: string, important: boolean, dueDate: string | null): void
     createdAt: Date.now(),
     category: 'today',
     important,
-    dueDate: dueDate || today
+    dueDate: dueDate  // 不设置默认日期，用户未选择则为 null
   };
 
   appState.tasks.unshift(newTask);
