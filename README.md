@@ -1,47 +1,97 @@
-# projects
+# 禅·任务 | Zen Tasks
 
-这是一个基于 TypeScript + Vite + Tailwind CSS 的轻量级 Web 应用项目，由扣子编程 CLI 创建。
+一个具有禅意美学的任务管理工具，专注于简单和高效的任务组织。
+
+## 功能特点
+
+- ✅ 任务增删改查
+- ✅ 状态筛选（今日/全部/进行中/已完成/已删除）
+- ✅ 标签筛选（重要/某天）
+- ✅ 回收站功能
+- ✅ 数据本地持久化（localStorage）
+- ✅ 响应式设计（PC端侧边栏布局 / 移动端紧凑布局）
+- ✅ 禅意美学界面
 
 ## 快速开始
+
+### 安装依赖
+
+```bash
+pnpm install
+```
 
 ### 启动开发服务器
 
 ```bash
-coze dev
+pnpm dev
 ```
 
-启动后，在浏览器中打开 [http://localhost:5000](http://localhost:5000) 查看应用。
-
-开发服务器支持热更新（HMR），修改代码后页面会自动刷新。
+访问 [http://localhost:5000](http://localhost:5000) 查看应用。
 
 ### 构建生产版本
 
 ```bash
-coze build
+pnpm run build
 ```
 
-构建产物位于 `dist/` 目录，可直接部署到静态托管服务。
+构建产物位于 `dist/` 目录。
 
-### 预览生产版本
+## 部署到 GitHub Pages
 
-```bash
-coze start
-```
+### 方法一：自动部署（推荐）
 
-在本地启动一个静态服务器，预览生产构建的效果。
+1. 将代码推送到 GitHub 仓库的 `main` 分支
+2. 进入仓库 Settings → Pages → Source
+3. 选择 "GitHub Actions"
+4. 推送代码后会自动触发部署
+
+### 方法二：手动部署
+
+1. 修改 `vite.config.ts` 中的 `base` 为你的仓库名：
+   ```ts
+   const base = '/你的仓库名/';
+   ```
+
+2. 构建并部署：
+   ```bash
+   pnpm run build
+   ```
+
+3. 将 `dist` 目录内容推送到 `gh-pages` 分支
+
+## 数据存储
+
+所有数据保存在浏览器的 localStorage 中：
+- 刷新页面数据不丢失
+- 清除浏览器数据会导致数据丢失
+- 数据仅保存在本地，不会上传到服务器
 
 ## 项目结构
 
 ```
 ├── index.html              # HTML 入口文件
 ├── src/
-│   ├── index.ts           # 应用入口（初始化）
+│   ├── index.ts           # 应用入口
 │   ├── main.ts            # 主逻辑文件
-│   └── index.css          # 全局样式（包含 Tailwind 指令）
+│   └── index.css          # 全局样式
+├── public/
+│   └── favicon.png        # 网站图标
+├── .github/workflows/
+│   └── deploy.yml         # GitHub Actions 部署配置
 ├── vite.config.ts         # Vite 配置
-├── tailwind.config.ts     # Tailwind CSS 配置
 └── tsconfig.json          # TypeScript 配置
 ```
+
+## 技术栈
+
+- **框架**: Vite + TypeScript
+- **样式**: Tailwind CSS
+- **存储**: localStorage
+- **部署**: GitHub Pages
+
+## License
+
+MIT
 
 ## 核心开发规范
 
