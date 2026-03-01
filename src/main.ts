@@ -243,24 +243,24 @@ function generateTasksHtml(tasks: Task[]): string {
     return `
     <div class="task-item slide-in ${task.completed ? 'completed' : ''} ${task.important ? 'important' : ''}" 
          data-id="${task.id}" 
-         style="animation-delay: ${index * 0.05}s; ${task.important ? 'border-left-color: #c9a87c;' : ''}">
+         style="animation-delay: ${index * 0.05}s;">
       <div style="display: flex; align-items: center; gap: 1rem;">
         <div class="zen-checkbox ${task.completed ? 'checked' : ''}" 
              data-action="toggle" 
              data-id="${task.id}"></div>
         <div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
           <span class="task-text" style="font-size: 0.95rem; ${task.important ? 'font-weight: 500;' : ''}">
-            ${task.important ? '<span style="color: #c9a87c; margin-right: 0.25rem;">★</span>' : ''}${escapeHtml(task.text)}
+            ${task.important ? '<span style="color: var(--accent); margin-right: 0.25rem;">★</span>' : ''}${escapeHtml(task.text)}
           </span>
           ${dateDisplay ? `
-            <span style="font-size: 0.75rem; color: ${overdue ? '#c97070' : 'var(--muted)'};">
+            <span style="font-size: 0.75rem; color: ${overdue ? 'var(--danger)' : 'var(--muted)'};">
               ${overdue ? '已过期 · ' : ''}${dateDisplay}
             </span>
           ` : ''}
         </div>
         <button class="delete-btn" data-action="delete" data-id="${task.id}" 
                 style="background: none; border: none; color: var(--muted); cursor: pointer; 
-                       font-size: 1.25rem; opacity: 0; transition: opacity 0.3s; padding: 0 0.5rem;">
+                       font-size: 1.25rem; opacity: 0; transition: opacity 0.2s; padding: 0.25rem 0.5rem; border-radius: 8px;">
           ×
         </button>
       </div>
@@ -272,11 +272,11 @@ function generateTasksHtml(tasks: Task[]): string {
 function generateEmptyHtml(): string {
   return `
     <div class="empty-state fade-in" style="text-align: center; padding: 3rem 1rem; color: var(--muted);">
-      <div class="empty-icon" style="font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.4;">○</div>
-      <p style="font-style: italic; margin-bottom: 1rem;">空无一人，心如止水</p>
-      <p class="mobile-only" style="font-size: 0.8rem; opacity: 0.7;">
-        点击右下角 <span style="display: inline-block; width: 20px; height: 20px; background: var(--ink-medium); 
-        color: white; border-radius: 50%; font-size: 0.75rem; line-height: 20px; vertical-align: middle;">+</span> 添加任务
+      <div class="empty-icon" style="font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.5;">📋</div>
+      <p style="margin-bottom: 1rem; font-weight: 500;">暂无任务</p>
+      <p class="mobile-only" style="font-size: 0.85rem; opacity: 0.7;">
+        点击右下角 <span style="display: inline-block; width: 24px; height: 24px; background: var(--accent); 
+        color: white; border-radius: 8px; font-size: 1rem; line-height: 24px; vertical-align: middle;">+</span> 添加任务
       </p>
       <p class="pc-only" style="font-size: 0.85rem; opacity: 0.7;">
         点击左侧「添加任务」按钮创建新任务
@@ -303,8 +303,8 @@ function renderDeletedTasks(container: HTMLElement): void {
   if (appState.deletedTasks.length === 0) {
     container.innerHTML = `
       <div class="empty-state fade-in" style="text-align: center; padding: 3rem 1rem; color: var(--muted);">
-        <div style="font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.4;">🗑</div>
-        <p style="font-style: italic;">回收站为空</p>
+        <div style="font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.5;">🗑️</div>
+        <p style="font-weight: 500;">回收站为空</p>
       </div>
     `;
     return;
@@ -321,25 +321,22 @@ function renderDeletedTasks(container: HTMLElement): void {
     return `
     <div class="task-item slide-in deleted-task" 
          data-id="${task.id}" 
-         style="animation-delay: ${index * 0.05}s; opacity: 0.7; border-left-color: var(--muted);">
+         style="animation-delay: ${index * 0.05}s; opacity: 0.7;">
       <div style="display: flex; align-items: center; gap: 1rem;">
         <div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
           <span class="task-text" style="font-size: 0.95rem; ${task.completed ? 'text-decoration: line-through; color: var(--muted);' : ''}">
-            ${task.important ? '<span style="color: #c9a87c; margin-right: 0.25rem;">★</span>' : ''}${escapeHtml(task.text)}
+            ${task.important ? '<span style="color: var(--accent); margin-right: 0.25rem;">★</span>' : ''}${escapeHtml(task.text)}
           </span>
           <span style="font-size: 0.75rem; color: var(--muted);">
             删除于 ${deletedDate}
           </span>
         </div>
-        <button class="restore-btn" data-action="restore" data-id="${task.id}" 
-                style="background: none; border: 1px solid var(--border); color: var(--ink-medium); 
-                       cursor: pointer; font-size: 0.8rem; padding: 0.25rem 0.75rem; 
-                       border-radius: 1rem; transition: all 0.3s;">
+        <button class="restore-btn" data-action="restore" data-id="${task.id}">
           恢复
         </button>
         <button class="permanent-delete-btn" data-action="permanent-delete" data-id="${task.id}" 
-                style="background: none; border: none; color: #c97070; cursor: pointer; 
-                       font-size: 1.25rem; opacity: 0; transition: opacity 0.3s; padding: 0 0.5rem;">
+                style="background: none; border: none; color: var(--danger); cursor: pointer; 
+                       font-size: 1.25rem; opacity: 0; transition: opacity 0.2s; padding: 0.25rem 0.5rem; border-radius: 8px;">
           ×
         </button>
       </div>
@@ -619,7 +616,7 @@ function updateFilterUI(): void {
     const btnFilter = btn.getAttribute('data-status');
     if (btnFilter === appState.statusFilter) {
       btn.classList.add('active');
-      (btn as HTMLElement).style.background = 'var(--ink-medium)';
+      (btn as HTMLElement).style.background = 'var(--accent)';
       (btn as HTMLElement).style.color = 'white';
     } else {
       btn.classList.remove('active');
@@ -644,9 +641,9 @@ function updateFilterUI(): void {
     const isSelected = appState.tags.includes(btnTag as 'important' | 'someday');
     if (isSelected) {
       btn.classList.add('active');
-      (btn as HTMLElement).style.background = 'var(--ink-medium)';
-      (btn as HTMLElement).style.color = 'white';
-      (btn as HTMLElement).style.borderColor = 'var(--ink-medium)';
+      (btn as HTMLElement).style.background = 'var(--accent-light)';
+      (btn as HTMLElement).style.color = 'var(--accent)';
+      (btn as HTMLElement).style.borderColor = 'var(--accent)';
     } else {
       btn.classList.remove('active');
       (btn as HTMLElement).style.background = 'transparent';
@@ -682,22 +679,21 @@ export function initApp(): void {
     <div class="app-container" style="min-height: 100vh; display: flex; flex-direction: column;">
       <!-- 装饰性背景 -->
       <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; overflow: hidden; z-index: -1;">
-        <div class="breathe" style="position: absolute; top: 10%; right: 15%; width: 300px; height: 300px; 
-             background: radial-gradient(circle, rgba(139,115,85,0.05) 0%, transparent 70%); border-radius: 50%;"></div>
-        <div class="breathe" style="position: absolute; bottom: 20%; left: 10%; width: 200px; height: 200px; 
-             background: radial-gradient(circle, rgba(212,229,237,0.1) 0%, transparent 70%); border-radius: 50%; 
-             animation-delay: 2s;"></div>
+        <div style="position: absolute; top: 10%; right: 15%; width: 400px; height: 400px; 
+             background: radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%); border-radius: 50%;"></div>
+        <div style="position: absolute; bottom: 20%; left: 10%; width: 300px; height: 300px; 
+             background: radial-gradient(circle, rgba(96,165,250,0.06) 0%, transparent 70%); border-radius: 50%;"></div>
       </div>
 
       <!-- ========== PC端侧边栏 ========== -->
       <aside class="pc-sidebar pc-only">
         <div class="sidebar-header">
-          <h1 style="font-family: 'Noto Serif SC', serif; font-size: 1.75rem; font-weight: 300; 
-              letter-spacing: 0.15em; color: var(--ink-dark); margin-bottom: 0.25rem;">
-            禅·任务
+          <h1 style="font-family: 'Inter', sans-serif; font-size: 1.5rem; font-weight: 700; 
+              letter-spacing: 0.05em; color: var(--foreground); margin-bottom: 0.25rem;">
+            任务清单
           </h1>
-          <p style="font-size: 0.75rem; color: var(--muted); letter-spacing: 0.1em; font-style: italic;">
-            简单 · 专注 · 当下
+          <p style="font-size: 0.85rem; color: var(--muted);">
+            简单 · 高效 · 专注
           </p>
         </div>
 
@@ -753,7 +749,7 @@ export function initApp(): void {
           <div class="filter-section">
             <div class="filter-section-title">标签</div>
             <button class="pc-tag-btn" data-tag="important">
-              <span style="color: #c9a87c;">★</span> 重要
+              <span style="color: var(--accent);">★</span> 重要
             </button>
             <button class="pc-tag-btn" data-tag="someday">
               某天
@@ -784,9 +780,9 @@ export function initApp(): void {
               <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
                 <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
                   <input type="checkbox" id="pc-important-checkbox" 
-                         style="width: 16px; height: 16px; accent-color: #c9a87c; cursor: pointer;">
+                         style="width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer;">
                   <span style="font-size: 0.85rem; color: var(--muted);">
-                    <span style="color: #c9a87c;">★</span> 重要
+                    <span style="color: var(--accent);">★</span> 重要
                   </span>
                 </label>
                 <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
@@ -815,12 +811,12 @@ export function initApp(): void {
       <!-- ========== 移动端布局 ========== -->
       <!-- 头部 - 移动端 -->
       <header class="fade-in mobile-only" style="padding: 1rem 1rem 0.5rem; text-align: center;">
-        <h1 style="font-family: 'Noto Serif SC', serif; font-size: 1.5rem; font-weight: 300; 
-            letter-spacing: 0.15em; color: var(--ink-dark); margin-bottom: 0.25rem;">
-          禅·任务
+        <h1 style="font-family: 'Inter', sans-serif; font-size: 1.5rem; font-weight: 700; 
+            letter-spacing: 0.05em; color: var(--foreground); margin-bottom: 0.25rem;">
+          任务清单
         </h1>
-        <p style="font-size: 0.75rem; color: var(--muted); letter-spacing: 0.1em; font-style: italic;">
-          简单 · 专注 · 当下
+        <p style="font-size: 0.85rem; color: var(--muted);">
+          简单 · 高效 · 专注
         </p>
       </header>
 
@@ -829,18 +825,18 @@ export function initApp(): void {
         <!-- 统计信息 -->
         <div class="fade-in delay-1" style="display: flex; justify-content: center; gap: 1.5rem; padding: 0.75rem 0; margin-bottom: 0.5rem;">
           <div style="text-align: center;">
-            <div style="font-size: 1.25rem; font-weight: 300; color: var(--ink-medium);" id="total-count">0</div>
-            <div style="font-size: 0.65rem; color: var(--muted); letter-spacing: 0.05em;">总数</div>
+            <div style="font-size: 1.25rem; font-weight: 700; color: var(--accent);" id="total-count">0</div>
+            <div style="font-size: 0.7rem; color: var(--muted); font-weight: 500;">总数</div>
           </div>
           <div style="width: 1px; background: var(--border);"></div>
           <div style="text-align: center;">
-            <div style="font-size: 1.25rem; font-weight: 300; color: var(--ink-medium);" id="active-count">0</div>
-            <div style="font-size: 0.65rem; color: var(--muted); letter-spacing: 0.05em;">进行中</div>
+            <div style="font-size: 1.25rem; font-weight: 700; color: var(--accent);" id="active-count">0</div>
+            <div style="font-size: 0.7rem; color: var(--muted); font-weight: 500;">进行中</div>
           </div>
           <div style="width: 1px; background: var(--border);"></div>
           <div style="text-align: center;">
-            <div style="font-size: 1.25rem; font-weight: 300; color: var(--ink-medium);" id="completed-count">0</div>
-            <div style="font-size: 0.65rem; color: var(--muted); letter-spacing: 0.05em;">已完成</div>
+            <div style="font-size: 1.25rem; font-weight: 700; color: var(--accent);" id="completed-count">0</div>
+            <div style="font-size: 0.7rem; color: var(--muted); font-weight: 500;">已完成</div>
           </div>
         </div>
 
@@ -849,33 +845,33 @@ export function initApp(): void {
              scrollbar-width: none; -ms-overflow-style: none; gap: 0.5rem; padding: 0.5rem 0; 
              margin-bottom: 0.75rem; border-bottom: 1px solid var(--border);">
           <button class="status-btn mobile-status-btn" data-status="today"
-                  style="background: transparent; border: none; padding: 0.4rem 0.75rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
-                         color: var(--muted); transition: all 0.3s; white-space: nowrap;">
+                  style="background: transparent; border: none; padding: 0.5rem 1rem; 
+                         border-radius: 10px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+                         color: var(--muted); transition: all 0.2s ease; white-space: nowrap;">
             今日
           </button>
           <button class="status-btn mobile-status-btn" data-status="all"
-                  style="background: transparent; border: none; padding: 0.4rem 0.75rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
-                         color: var(--muted); transition: all 0.3s; white-space: nowrap;">
+                  style="background: transparent; border: none; padding: 0.5rem 1rem; 
+                         border-radius: 10px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+                         color: var(--muted); transition: all 0.2s ease; white-space: nowrap;">
             全部
           </button>
           <button class="status-btn mobile-status-btn" data-status="active"
-                  style="background: transparent; border: none; padding: 0.4rem 0.75rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
-                         color: var(--muted); transition: all 0.3s; white-space: nowrap;">
+                  style="background: transparent; border: none; padding: 0.5rem 1rem; 
+                         border-radius: 10px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+                         color: var(--muted); transition: all 0.2s ease; white-space: nowrap;">
             进行中
           </button>
           <button class="status-btn mobile-status-btn" data-status="completed"
-                  style="background: transparent; border: none; padding: 0.4rem 0.75rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
-                         color: var(--muted); transition: all 0.3s; white-space: nowrap;">
+                  style="background: transparent; border: none; padding: 0.5rem 1rem; 
+                         border-radius: 10px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+                         color: var(--muted); transition: all 0.2s ease; white-space: nowrap;">
             已完成
           </button>
           <button class="status-btn mobile-status-btn" data-status="deleted"
-                  style="background: transparent; border: none; padding: 0.4rem 0.75rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.8rem; 
-                         color: var(--muted); transition: all 0.3s; white-space: nowrap;">
+                  style="background: transparent; border: none; padding: 0.5rem 1rem; 
+                         border-radius: 10px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+                         color: var(--muted); transition: all 0.2s ease; white-space: nowrap;">
             已删除
           </button>
         </div>
@@ -883,15 +879,15 @@ export function initApp(): void {
         <!-- 标签筛选（多选） -->
         <div class="fade-in delay-3" style="display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1rem;">
           <button class="tag-btn mobile-tag-btn" data-tag="important"
-                  style="background: transparent; border: 1px solid var(--border); padding: 0.2rem 0.6rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.75rem; 
-                         color: var(--muted); transition: all 0.3s;">
-            <span style="color: #c9a87c;">★</span> 重要
+                  style="background: transparent; border: 2px solid var(--border); padding: 0.375rem 0.75rem; 
+                         border-radius: 20px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+                         color: var(--muted); transition: all 0.2s ease;">
+            <span style="color: var(--accent);">★</span> 重要
           </button>
           <button class="tag-btn mobile-tag-btn" data-tag="someday"
-                  style="background: transparent; border: 1px solid var(--border); padding: 0.2rem 0.6rem; 
-                         border-radius: 1rem; cursor: pointer; font-size: 0.75rem; 
-                         color: var(--muted); transition: all 0.3s;">
+                  style="background: transparent; border: 2px solid var(--border); padding: 0.375rem 0.75rem; 
+                         border-radius: 20px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+                         color: var(--muted); transition: all 0.2s ease;">
             某天
           </button>
         </div>
@@ -910,9 +906,9 @@ export function initApp(): void {
               <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                 <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; user-select: none;">
                   <input type="checkbox" id="important-checkbox" 
-                         style="width: 14px; height: 14px; accent-color: #c9a87c; cursor: pointer;">
-                  <span style="font-size: 0.8rem; color: var(--muted);">
-                    <span style="color: #c9a87c;">★</span> 重要
+                         style="width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer;">
+                  <span style="font-size: 0.85rem; color: var(--muted);">
+                    <span style="color: var(--accent);">★</span> 重要
                   </span>
                 </label>
                 <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
@@ -942,17 +938,17 @@ export function initApp(): void {
       <!-- 移动端悬浮添加按钮 -->
       <button id="toggle-add-btn" class="mobile-only"
               style="position: fixed; bottom: 2rem; right: 1.5rem; width: 56px; height: 56px; 
-                     border-radius: 50%; background: var(--ink-medium); border: none; 
+                     border-radius: 16px; background: var(--accent); border: none; 
                      color: white; font-size: 1.75rem; cursor: pointer; 
-                     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                     box-shadow: var(--shadow-md);
                      display: flex; align-items: center; justify-content: center;
-                     transition: all 0.3s ease; z-index: 100;">
+                     transition: all 0.2s ease; z-index: 100;">
         +
       </button>
 
       <!-- 移动端底部 -->
-      <footer class="mobile-only" style="text-align: center; padding: 1rem; color: var(--muted); font-size: 0.65rem;">
-        <span style="letter-spacing: 0.1em;">专注当下，静心完成</span>
+      <footer class="mobile-only" style="text-align: center; padding: 1rem; color: var(--muted); font-size: 0.75rem;">
+        <span>专注当下，静心完成</span>
       </footer>
     </div>
   `;
